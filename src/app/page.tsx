@@ -388,23 +388,23 @@ export default function UnifiedPortalGateway() {
         {/* ========================================================= */}
         {/* 3D LAYERED CARD DECK ROTARY CAROUSEL                      */}
         {/* ========================================================= */}
-        <div className="relative w-full max-w-lg h-[290px] md:h-[300px] flex items-center justify-center">
+        <div className="relative w-full max-w-lg md:max-w-xl h-[290px] md:h-[380px] flex items-center justify-center mt-4 md:mt-8">
           
           {/* Top & Bottom Quick Arrow Steppers */}
           <button
             onClick={rollToPrev}
-            className="absolute -top-6 z-30 p-1.5 rounded-full bg-white/90 dark:bg-[#12141c]/90 border border-slate-200 dark:border-slate-800 text-slate-500 hover:text-primary shadow-sm hover:scale-110 transition-all"
+            className="absolute -top-6 md:-top-10 z-30 p-2 rounded-full bg-white/90 dark:bg-[#12141c]/90 border border-slate-200 dark:border-slate-800 text-slate-500 hover:text-primary shadow-sm hover:scale-110 transition-all min-h-[44px] min-w-[44px] flex items-center justify-center"
             title="Previous (Scroll Up)"
           >
-            <ChevronUp className="w-4 h-4" />
+            <ChevronUp className="w-5 h-5" />
           </button>
 
           <button
             onClick={rollToNext}
-            className="absolute -bottom-6 z-30 p-1.5 rounded-full bg-white/90 dark:bg-[#12141c]/90 border border-slate-200 dark:border-slate-800 text-slate-500 hover:text-primary shadow-sm hover:scale-110 transition-all"
+            className="absolute -bottom-6 md:-bottom-10 z-30 p-2 rounded-full bg-white/90 dark:bg-[#12141c]/90 border border-slate-200 dark:border-slate-800 text-slate-500 hover:text-primary shadow-sm hover:scale-110 transition-all min-h-[44px] min-w-[44px] flex items-center justify-center"
             title="Next (Scroll Down)"
           >
-            <ChevronDown className="w-4 h-4" />
+            <ChevronDown className="w-5 h-5" />
           </button>
 
           {/* 3 Layered Deck Cards */}
@@ -434,30 +434,30 @@ export default function UnifiedPortalGateway() {
                   isFront
                     ? 'translate-y-0 scale-100 opacity-100 z-20 bg-white dark:bg-[#12141c] border-primary dark:border-primary shadow-2xl shadow-primary/15 ring-2 ring-primary/20 pointer-events-auto'
                     : isBehindTop
-                    ? '-translate-y-12 sm:-translate-y-14 scale-[0.90] opacity-35 hover:opacity-65 z-10 bg-white/70 dark:bg-[#12141c]/60 border-slate-200 dark:border-slate-800 pointer-events-auto blur-[0.5px]'
-                    : 'translate-y-12 sm:translate-y-14 scale-[0.90] opacity-35 hover:opacity-65 z-10 bg-white/70 dark:bg-[#12141c]/60 border-slate-200 dark:border-slate-800 pointer-events-auto blur-[0.5px]'
+                    ? '-translate-y-12 sm:-translate-y-16 scale-[0.90] opacity-35 hover:opacity-65 z-10 bg-white/70 dark:bg-[#12141c]/60 border-slate-200 dark:border-slate-800 pointer-events-auto blur-[0.5px]'
+                    : 'translate-y-12 sm:translate-y-16 scale-[0.90] opacity-35 hover:opacity-65 z-10 bg-white/70 dark:bg-[#12141c]/60 border-slate-200 dark:border-slate-800 pointer-events-auto blur-[0.5px]'
                 }`}
               >
                 {/* Mac window top bar */}
-                <div className="px-5 py-2 border-b border-slate-100 dark:border-slate-800/80 bg-slate-50/80 dark:bg-slate-900/60 flex items-center justify-between">
+                <div className="px-5 py-2.5 border-b border-slate-100 dark:border-slate-800/80 bg-slate-50/80 dark:bg-slate-900/60 flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <div className="flex items-center gap-1.5">
-                      <div className={`w-2.5 h-2.5 rounded-full ${isFront ? 'bg-rose-500' : 'bg-slate-300 dark:bg-slate-700'}`} />
-                      <div className={`w-2.5 h-2.5 rounded-full ${isFront ? 'bg-amber-500' : 'bg-slate-300 dark:bg-slate-700'}`} />
-                      <div className={`w-2.5 h-2.5 rounded-full ${isFront ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-700'}`} />
+                      <div className={`w-3 h-3 rounded-full ${isFront ? 'bg-rose-500' : 'bg-slate-300 dark:bg-slate-700'}`} />
+                      <div className={`w-3 h-3 rounded-full ${isFront ? 'bg-amber-500' : 'bg-slate-300 dark:bg-slate-700'}`} />
+                      <div className={`w-3 h-3 rounded-full ${isFront ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-700'}`} />
                     </div>
-                    <span className="font-mono text-[10px] text-slate-400 dark:text-slate-500 uppercase tracking-wider ml-1">
+                    <span className="font-mono text-[10px] md:text-xs text-slate-400 dark:text-slate-500 uppercase tracking-wider ml-1">
                       {item.terminalPrompt}
                     </span>
                   </div>
 
-                  <span className="font-mono text-xs font-bold text-slate-400 dark:text-slate-500">
+                  <span className="font-mono text-xs md:text-sm font-bold text-slate-400 dark:text-slate-500">
                     {item.number}
                   </span>
                 </div>
 
                 {/* Card Content Body */}
-                <div className="p-5 md:p-6 space-y-3.5">
+                <div className="p-5 md:p-8 space-y-4 md:space-y-6">
                   <div className="flex items-center gap-3">
                     <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-white shadow-2xs shrink-0 ${
                       item.accentColor === 'blue' ? 'bg-blue-600' :
@@ -512,18 +512,18 @@ export default function UnifiedPortalGateway() {
                       : item.ctaText;
 
                     return (
-                      <div className="pt-1">
+                      <div className="pt-1 md:pt-2">
                         <Link
                           href={targetHref}
                           onClick={(e) => e.stopPropagation()}
-                          className={`w-full py-2.5 px-4 rounded-xl text-white text-xs font-bold transition-all shadow-md flex items-center justify-center gap-2 ${
+                          className={`w-full py-3 md:py-3.5 px-4 rounded-xl text-white text-xs md:text-sm font-bold transition-all shadow-md flex items-center justify-center gap-2 min-h-[44px] ${
                             item.accentColor === 'blue' ? 'bg-blue-600 hover:bg-blue-700 shadow-blue-500/20' :
                             item.accentColor === 'indigo' ? 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-500/20' :
                             'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/20'
                           }`}
                         >
                           <span>{ctaLabel}</span>
-                          <ArrowRight className="w-4 h-4" />
+                          <ArrowRight className="w-4 h-4 md:w-5 md:h-5" />
                         </Link>
                       </div>
                     );

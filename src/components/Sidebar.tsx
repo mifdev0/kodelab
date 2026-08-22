@@ -56,10 +56,10 @@ export default function Sidebar() {
 
         <button
           onClick={() => setIsSidebarOpen(false)}
-          className="p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
+          className="p-2 text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
           title="Hide Sidebar"
         >
-          <PanelLeftClose className="w-4 h-4" />
+          <PanelLeftClose className="w-4 h-4 md:w-5 md:h-5" />
         </button>
       </div>
 
@@ -83,13 +83,13 @@ export default function Sidebar() {
             <Link
               key={item.href}
               href={item.href}
-              className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl transition-all text-xs font-bold ${
+              className={`flex items-center gap-3 px-3.5 py-3 md:py-3.5 min-h-[44px] rounded-xl transition-all text-xs md:text-sm font-bold ${
                 isActive
                   ? 'bg-primary text-white shadow-xs font-bold'
                   : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/60 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
-              <Icon className="w-4 h-4 shrink-0" />
+              <Icon className="w-4 h-4 md:w-5 md:h-5 shrink-0" />
               <span>{item.label}</span>
             </Link>
           );
@@ -100,14 +100,14 @@ export default function Sidebar() {
       <div className="p-3 border-t border-slate-100 dark:border-slate-800/80">
         <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 dark:bg-[#12141c] border border-slate-200/80 dark:border-slate-800/80">
           <div className="flex items-center gap-2.5 overflow-hidden">
-            <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary dark:text-primary-light flex items-center justify-center font-black text-xs shrink-0 border border-primary/20">
+            <div className="w-9 h-9 md:w-10 md:h-10 rounded-lg bg-primary/10 text-primary dark:text-primary-light flex items-center justify-center font-black text-xs md:text-sm shrink-0 border border-primary/20">
               {user?.full_name?.charAt(0)?.toUpperCase() || 'U'}
             </div>
             <div className="flex flex-col min-w-0">
-              <span className="text-xs font-bold text-slate-900 dark:text-white truncate">
+              <span className="text-xs md:text-sm font-bold text-slate-900 dark:text-white truncate">
                 {user?.full_name || 'Guest'}
               </span>
-              <span className="text-[10px] font-mono text-slate-400 dark:text-slate-500 truncate">
+              <span className="text-[10px] md:text-xs font-mono text-slate-400 dark:text-slate-500 truncate">
                 {user?.role === 'teacher' ? 'Instructor' : `@${user?.username || 'student'}`}
               </span>
             </div>
@@ -115,10 +115,10 @@ export default function Sidebar() {
 
           <button
             onClick={logout}
-            className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-lg transition-colors"
+            className="w-10 h-10 md:w-11 md:h-11 flex items-center justify-center text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-lg transition-colors shrink-0"
             title="Log Out"
           >
-            <LogOut className="w-3.5 h-3.5" />
+            <LogOut className="w-4 h-4 md:w-5 md:h-5" />
           </button>
         </div>
       </div>

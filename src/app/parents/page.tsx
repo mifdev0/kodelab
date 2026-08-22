@@ -196,7 +196,7 @@ function ParentShowcaseContent() {
               // No class sessions recorded yet.
             </div>
           ) : (
-            <div className="bg-white dark:bg-[#12141c] rounded-2xl border border-slate-200 dark:border-slate-800 divide-y divide-slate-100 dark:divide-slate-800/80 shadow-xs overflow-hidden">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-4 md:gap-6">
               {meetings.map((session) => {
                 const stats = sessionStats.get(session.id) || { count: 0, studentNames: [], studentClasses: new Set() };
                 const classList = Array.from(stats.studentClasses).join(', ');
@@ -209,40 +209,38 @@ function ParentShowcaseContent() {
                       setSearchQuery('');
                       setSelectedClassFilter('all');
                     }}
-                    className="p-4 md:p-5 hover:bg-slate-50 dark:hover:bg-slate-900/40 transition-colors cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-4 group"
+                    className="bg-white dark:bg-[#12141c] rounded-2xl border border-slate-200 dark:border-slate-800 p-4 md:p-5 hover:border-primary/50 transition-all cursor-pointer flex flex-col gap-4 group shadow-xs hover:shadow-md"
                   >
-                    <div className="flex items-center gap-4 min-w-0 flex-1">
-                      <div className="w-16 h-16 rounded-xl overflow-hidden bg-slate-900 shrink-0 border border-slate-200 dark:border-slate-800 shadow-2xs">
-                        <img
-                          src={session.banner_url || 'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?q=80&w=800&auto=format&fit=crop'}
-                          alt={session.title}
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                        />
-                      </div>
-
-                      <div className="space-y-0.5 min-w-0 flex-1">
-                        <span className="text-[11px] font-mono text-slate-400 dark:text-slate-500 font-semibold">
-                          {new Date(session.created_at || Date.now()).toLocaleDateString('en-US', {
-                            month: 'short',
-                            day: 'numeric',
-                            year: 'numeric'
-                          })}
-                        </span>
-
-                        <h2 className="text-sm md:text-base font-bold text-slate-900 dark:text-white group-hover:text-primary transition-colors truncate">
-                          {session.title}
-                        </h2>
-
-                        {session.description && (
-                          <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-1">
-                            {session.description}
-                          </p>
-                        )}
-                      </div>
+                    <div className="w-full h-32 md:h-40 rounded-xl overflow-hidden bg-slate-900 shrink-0 border border-slate-200 dark:border-slate-800 shadow-2xs">
+                      <img
+                        src={session.banner_url || 'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?q=80&w=800&auto=format&fit=crop'}
+                        alt={session.title}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      />
                     </div>
 
-                    <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100 dark:border-slate-800">
-                      <span className="text-xs font-mono font-semibold px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                    <div className="space-y-1 min-w-0 flex-1">
+                      <span className="text-[11px] font-mono text-slate-400 dark:text-slate-500 font-semibold">
+                        {new Date(session.created_at || Date.now()).toLocaleDateString('en-US', {
+                          month: 'short',
+                          day: 'numeric',
+                          year: 'numeric'
+                        })}
+                      </span>
+
+                      <h2 className="text-sm md:text-base font-bold text-slate-900 dark:text-white group-hover:text-primary transition-colors truncate">
+                        {session.title}
+                      </h2>
+
+                      {session.description && (
+                        <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-2">
+                          {session.description}
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="flex items-center justify-between pt-3 border-t border-slate-100 dark:border-slate-800 mt-auto">
+                      <span className="text-[10px] md:text-xs font-mono font-semibold px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
                         {stats.count} works {classList ? `• Class ${classList}` : ''}
                       </span>
                       <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-primary group-hover:translate-x-0.5 transition-all" />
@@ -372,7 +370,7 @@ function ParentShowcaseContent() {
                     <div className="flex items-center gap-2 shrink-0 pt-2 sm:pt-0">
                       <button
                         onClick={() => window.open(`/preview?project=${project.id}`, '_blank')}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-colors shadow-2xs"
+                        className="inline-flex items-center gap-1.5 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-colors shadow-2xs min-h-[44px]"
                       >
                         <Globe className="w-3.5 h-3.5" />
                         <span>Open Web</span>
@@ -381,7 +379,7 @@ function ParentShowcaseContent() {
 
                       <button
                         onClick={() => handleOpenInspectCode(project)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold rounded-xl transition-colors border border-slate-200 dark:border-slate-700"
+                        className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold rounded-xl transition-colors border border-slate-200 dark:border-slate-700 min-h-[44px]"
                       >
                         <Code2 className="w-3.5 h-3.5 text-primary" />
                         <span>Code</span>

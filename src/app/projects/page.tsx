@@ -332,19 +332,19 @@ export default function ProjectsPage() {
                         e.stopPropagation();
                         window.open(`/preview?project=${project.id}`, '_blank');
                       }}
-                      className="flex items-center gap-1 px-2.5 py-1 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 font-bold rounded-lg text-xs transition-colors border border-emerald-500/20"
+                      className="flex items-center gap-1 px-3 py-2 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 font-bold rounded-lg text-xs transition-colors border border-emerald-500/20 min-h-[44px]"
                       title="Preview live website in a new tab"
                     >
-                      <Globe className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                      <Globe className="w-4 h-4 md:w-3.5 md:h-3.5" />
                       <span>Live Web</span>
                     </button>
 
                     <button
                       onClick={() => router.push(`/projects/${project.id}`)}
-                      className="flex items-center gap-1 px-2.5 py-1 bg-primary/10 hover:bg-primary/20 text-primary dark:text-primary-light font-bold rounded-lg text-xs transition-colors border border-primary/20"
+                      className="flex items-center gap-1 px-3 py-2 bg-primary/10 hover:bg-primary/20 text-primary dark:text-primary-light font-bold rounded-lg text-xs transition-colors border border-primary/20 min-h-[44px]"
                       title="Open in Code Editor"
                     >
-                      <Code2 className="w-3.5 h-3.5" />
+                      <Code2 className="w-4 h-4 md:w-3.5 md:h-3.5" />
                       <span>Open Editor</span>
                     </button>
                   </div>

@@ -384,10 +384,10 @@ export default function TeacherSessionsDashboard() {
         </section>
 
         {/* 2-Column Master Detail: Sessions List (Left) & Student Folders Grid (Right) */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-4 lg:gap-6">
           
-          {/* Left Column: Session Meetings List (4 cols) */}
-          <aside className="lg:col-span-4 space-y-3">
+          {/* Left Column: Session Meetings List */}
+          <aside className="md:col-span-5 lg:col-span-4 space-y-3">
             <div className="flex items-center justify-between px-1">
               <span className="text-xs font-bold uppercase tracking-wider text-on-surface-variant dark:text-gray-400 flex items-center gap-1.5">
                 <BookOpen className="w-3.5 h-3.5 text-primary" />
@@ -398,7 +398,7 @@ export default function TeacherSessionsDashboard() {
               </span>
             </div>
 
-            <div className="space-y-2.5">
+            <div className="space-y-2.5 h-[calc(100vh-200px)] overflow-y-auto pr-1 pb-4">
               {meetings.map((meeting) => {
                 const isSelected = meeting.id === selectedMeetingId;
                 const projs = store.getProjectsByMeeting(meeting.id);
@@ -408,7 +408,7 @@ export default function TeacherSessionsDashboard() {
                   <div
                     key={meeting.id}
                     onClick={() => handleSelectMeeting(meeting.id)}
-                    className={`p-4 rounded-2xl border transition-all cursor-pointer select-none relative group ${
+                    className={`p-4 rounded-2xl border transition-all cursor-pointer select-none relative group min-h-[44px] ${
                       isSelected
                         ? 'bg-primary-container/20 dark:bg-primary/10 border-primary shadow-xs ring-1 ring-primary'
                         : 'bg-surface-container-lowest dark:bg-[#181a1f] border-surface-container dark:border-gray-800 hover:border-primary/50'
@@ -417,7 +417,7 @@ export default function TeacherSessionsDashboard() {
                     <div className="flex items-start justify-between gap-2 mb-1.5">
                       <div className="flex items-center gap-2">
                         <span
-                          className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-black ${
+                          className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-black shrink-0 ${
                             isSelected
                               ? 'bg-primary text-white'
                               : 'bg-surface-container dark:bg-gray-800 text-on-surface-variant dark:text-gray-300'
@@ -460,11 +460,11 @@ export default function TeacherSessionsDashboard() {
                         </span>
                       </div>
 
-                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="flex items-center gap-1 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                         {isTeacher && (
                           <button
                             onClick={(e) => handleToggleSessionStatus(meeting.id, e)}
-                            className={`p-1 text-xs hover:underline font-bold ${
+                            className={`p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-xs hover:underline font-bold ${
                               meeting.is_active
                                 ? 'text-amber-600 dark:text-amber-400'
                                 : 'text-emerald-600 dark:text-emerald-400'
@@ -477,10 +477,10 @@ export default function TeacherSessionsDashboard() {
                         {isTeacher && (
                           <button
                             onClick={(e) => handleDeleteSession(meeting.id, e)}
-                            className="p-1 text-on-surface-variant hover:text-error dark:hover:text-red-400 transition-colors"
+                            className="p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-on-surface-variant hover:text-error dark:hover:text-red-400 transition-colors"
                             title="Delete Session"
                           >
-                            <Trash2 className="w-3.5 h-3.5" />
+                            <Trash2 className="w-4 h-4" />
                           </button>
                         )}
                       </div>
@@ -491,8 +491,8 @@ export default function TeacherSessionsDashboard() {
             </div>
           </aside>
 
-          {/* Right Column: Session Folder Inspector & Student Grid (8 cols) */}
-          <main className="lg:col-span-8 space-y-4">
+          {/* Right Column: Session Folder Inspector & Student Grid */}
+          <main className="md:col-span-7 lg:col-span-8 space-y-4 h-[calc(100vh-200px)] overflow-y-auto pb-4 pr-1">
             
             {/* Active Session Detail Card */}
             {selectedMeeting ? (

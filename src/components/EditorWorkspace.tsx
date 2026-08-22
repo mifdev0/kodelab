@@ -808,25 +808,25 @@ export default function EditorWorkspace({ initialMeetingId }: EditorWorkspacePro
                 <div className="flex items-center gap-1">
                   <button
                     onClick={() => undoRef.current?.()}
-                    className="w-8 h-8 flex items-center justify-center text-on-surface-variant dark:text-gray-400 hover:text-on-surface dark:hover:text-white hover:bg-surface-container dark:hover:bg-gray-800 rounded-lg transition-colors"
+                    className="w-9 h-9 md:w-11 md:h-11 flex items-center justify-center text-on-surface-variant dark:text-gray-400 hover:text-on-surface dark:hover:text-white hover:bg-surface-container dark:hover:bg-gray-800 rounded-lg transition-colors"
                     title="Undo"
                   >
-                    <RotateCcw className="w-4 h-4" />
+                    <RotateCcw className="w-4 h-4 md:w-5 md:h-5" />
                   </button>
                   <button
                     onClick={() => redoRef.current?.()}
-                    className="w-8 h-8 flex items-center justify-center text-on-surface-variant dark:text-gray-400 hover:text-on-surface dark:hover:text-white hover:bg-surface-container dark:hover:bg-gray-800 rounded-lg transition-colors"
+                    className="w-9 h-9 md:w-11 md:h-11 flex items-center justify-center text-on-surface-variant dark:text-gray-400 hover:text-on-surface dark:hover:text-white hover:bg-surface-container dark:hover:bg-gray-800 rounded-lg transition-colors"
                     title="Redo"
                   >
-                    <RotateCw className="w-4 h-4" />
+                    <RotateCw className="w-4 h-4 md:w-5 md:h-5" />
                   </button>
                 </div>
 
                 {/* Mobile View Switcher: Code vs Preview */}
-                <div className="flex lg:hidden items-center p-0.5 rounded-lg bg-surface-container dark:bg-gray-800 text-xs font-bold">
+                <div className="flex lg:hidden items-center p-1 rounded-xl bg-surface-container dark:bg-gray-800 text-xs font-bold">
                   <button
                     onClick={() => setMobileTab('editor')}
-                    className={`px-2.5 py-1 rounded-md transition-all ${
+                    className={`px-3 py-2 rounded-lg transition-all min-h-[44px] flex items-center justify-center ${
                       mobileTab === 'editor'
                         ? 'bg-primary text-white shadow-xs'
                         : 'text-on-surface-variant dark:text-gray-400 hover:text-on-surface dark:hover:text-white'
@@ -836,7 +836,7 @@ export default function EditorWorkspace({ initialMeetingId }: EditorWorkspacePro
                   </button>
                   <button
                     onClick={() => setMobileTab('preview')}
-                    className={`px-2.5 py-1 rounded-md transition-all ${
+                    className={`px-3 py-2 rounded-lg transition-all min-h-[44px] flex items-center justify-center ${
                       mobileTab === 'preview'
                         ? 'bg-primary text-white shadow-xs'
                         : 'text-on-surface-variant dark:text-gray-400 hover:text-on-surface dark:hover:text-white'

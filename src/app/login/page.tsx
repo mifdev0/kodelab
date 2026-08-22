@@ -196,19 +196,19 @@ function LoginContent() {
       {/* Background blueprint grid */}
       <div className="absolute inset-0 bg-[radial-gradient(#cbd5e1_1px,transparent_1px)] dark:bg-[radial-gradient(#1e2433_1px,transparent_1px)] [background-size:24px_24px] pointer-events-none opacity-50 dark:opacity-30 -z-10" />
 
-      <div className="w-full max-w-sm space-y-5">
+      <div className="w-full max-w-sm md:max-w-md space-y-5 md:space-y-6">
         
         {/* Navigation back */}
         <div className="flex items-center justify-between">
           <Link
             href="/"
-            className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white transition-colors"
+            className="inline-flex items-center gap-1.5 text-xs md:text-sm font-semibold text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white transition-colors min-h-[44px] px-2 -ml-2"
           >
-            <ArrowLeft className="w-3.5 h-3.5" />
+            <ArrowLeft className="w-4 h-4" />
             <span>Main Gateway</span>
           </Link>
 
-          <span className="text-[11px] font-mono text-slate-400 dark:text-slate-500">
+          <span className="text-[11px] md:text-xs font-mono text-slate-400 dark:text-slate-500">
             {role === 'teacher' ? 'role: instructor' : 'role: student'}
           </span>
         </div>
@@ -217,32 +217,32 @@ function LoginContent() {
         <div className="bg-white dark:bg-[#12141c] rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xl overflow-hidden">
           
           {/* Mac window header */}
-          <div className="px-5 py-3 border-b border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/60 flex items-center justify-between">
-            <div className="flex items-center gap-1.5">
-              <div className="w-2.5 h-2.5 rounded-full bg-rose-500/80" />
-              <div className="w-2.5 h-2.5 rounded-full bg-amber-500/80" />
-              <div className="w-2.5 h-2.5 rounded-full bg-emerald-500/80" />
+          <div className="px-5 py-3 md:py-3.5 border-b border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/60 flex items-center justify-between">
+            <div className="flex items-center gap-1.5 md:gap-2">
+              <div className="w-2.5 h-2.5 md:w-3 md:h-3 rounded-full bg-rose-500/80" />
+              <div className="w-2.5 h-2.5 md:w-3 md:h-3 rounded-full bg-amber-500/80" />
+              <div className="w-2.5 h-2.5 md:w-3 md:h-3 rounded-full bg-emerald-500/80" />
             </div>
-            <span className="font-mono text-[10px] text-slate-400 dark:text-slate-500">
+            <span className="font-mono text-[10px] md:text-xs text-slate-400 dark:text-slate-500">
               {role === 'teacher' ? 'auth://instructor-login' : 'auth://student-login'}
             </span>
           </div>
 
-          <div className="p-6 md:p-7 space-y-5">
+          <div className="p-6 md:p-8 space-y-5 md:space-y-6">
             
             {/* Header Title */}
-            <div className="space-y-1">
-              <div className="flex items-center gap-2">
-                <div className={`w-7 h-7 rounded-lg flex items-center justify-center font-bold text-white shadow-xs ${
+            <div className="space-y-1 md:space-y-2">
+              <div className="flex items-center gap-2 md:gap-3">
+                <div className={`w-7 h-7 md:w-9 md:h-9 rounded-lg flex items-center justify-center font-bold text-white shadow-xs ${
                   role === 'teacher' ? 'bg-indigo-600' : 'bg-primary'
                 }`}>
-                  {role === 'teacher' ? <Terminal className="w-3.5 h-3.5" /> : <Laptop className="w-3.5 h-3.5" />}
+                  {role === 'teacher' ? <Terminal className="w-4 h-4 md:w-5 md:h-5" /> : <Laptop className="w-4 h-4 md:w-5 md:h-5" />}
                 </div>
-                <h1 className="text-lg font-black tracking-tight text-slate-900 dark:text-white">
+                <h1 className="text-lg md:text-2xl font-black tracking-tight text-slate-900 dark:text-white">
                   {role === 'teacher' ? 'Instructor Portal' : 'Student Studio'}
                 </h1>
               </div>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
+              <p className="text-xs md:text-sm text-slate-500 dark:text-slate-400">
                 {role === 'teacher'
                   ? 'Access your instructor workspace & session controls.'
                   : 'Sign in to access code editor & assignments.'}
@@ -343,7 +343,7 @@ function LoginContent() {
 
                 <button
                   type="submit"
-                  className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-md transition-colors"
+                  className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-md transition-colors min-h-[44px]"
                 >
                   Enter Instructor Workspace →
                 </button>
@@ -539,7 +539,7 @@ function LoginContent() {
 
                 <button
                   type="submit"
-                  className="w-full py-2.5 bg-primary text-white text-xs font-bold rounded-xl hover:bg-primary-hover shadow-md transition-colors"
+                  className="w-full py-2.5 bg-primary text-white text-xs font-bold rounded-xl hover:bg-primary-hover shadow-md transition-colors min-h-[44px]"
                 >
                   Sign In to Studio →
                 </button>
