@@ -60,7 +60,7 @@ export const store = {
     return this.getProfiles().filter(p => p.role === 'student');
   },
 
-  updateStudentProfile(studentId: string, updates: Partial<Profile>): Profile | undefined {
+  async updateStudentProfile(studentId: string, updates: Partial<Profile>): Promise<Profile | undefined> {
     const profiles = this.getProfiles();
     let updatedProfile: Profile | undefined;
     const updated = profiles.map(p => {
@@ -85,19 +85,22 @@ export const store = {
     }
 
     if (supabase && updatedProfile) {
-      supabase.from('profiles').update(updates).eq('id', studentId).then(({ error }) => {
+      try {
+        const { error } = await supabase.from('profiles').update(updates).eq('id', studentId);
         if (error) console.warn('Supabase student update error:', error.message);
-      });
+      } catch (e) {
+        console.warn('Supabase student update network error:', e);
+      }
     }
 
     return updatedProfile;
   },
 
-  resetStudentPassword(studentId: string, newPassword: string): Profile | undefined {
-    return this.updateStudentProfile(studentId, { password: newPassword });
+  async resetStudentPassword(studentId: string, newPassword: string): Promise<Profile | undefined> {
+    return await this.updateStudentProfile(studentId, { password: newPassword });
   },
 
-  deleteStudent(studentId: string): void {
+  async deleteStudent(studentId: string): Promise<void> {
     const profiles = this.getProfiles();
     const filtered = profiles.filter(p => p.id !== studentId);
     setStored('profiles', filtered);
@@ -113,9 +116,14 @@ export const store = {
     setStored('submissions', filteredSubs);
 
     if (supabase) {
-      supabase.from('profiles').delete().eq('id', studentId).then(({ error }) => {
-        if (error) console.warn('Supabase student deletion error:', error.message);
-      });
+      try {
+        await supabase.from('project_files').delete().in('project_id', projects.filter(p => p.student_id === studentId).map(p => p.id));
+        await supabase.from('user_projects').delete().eq('student_id', studentId);
+        await supabase.from('submissions').delete().eq('student_id', studentId);
+        await supabase.from('profiles').delete().eq('id', studentId);
+      } catch (e) {
+        console.warn('Supabase student deletion network error:', e);
+      }
     }
   },
 
@@ -390,14 +398,14 @@ export const store = {
     return this.getSubmissionById(submissionId);
   },
 
-  createStudent(
+  async createStudent(
     name: string,
     email?: string,
     gender: 'male' | 'female' | 'Laki-laki' | 'Perempuan' = 'male',
     className: string = '7A',
     customUsername?: string,
     password?: string
-  ): Profile {
+  ): Promise<Profile> {
     const profiles = this.getProfiles();
     const cleanName = name.trim();
     const slug = cleanName.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 10);
@@ -416,27 +424,31 @@ export const store = {
       created_at: new Date().toISOString(),
     };
 
+    // 1. Always save to localStorage immediately (offline-first)
     const updated = [...profiles, newStudent];
     setStored('profiles', updated);
 
-    // Sync to Supabase in background
+    // 2. If Supabase is configured, AWAIT the insert to guarantee cloud persistence
     if (supabase) {
-      supabase.from('profiles').insert([newStudent]).then(({ error }) => {
-        if (error) console.warn('Supabase profile sync notice:', error.message);
-      });
+      try {
+        const { error } = await supabase.from('profiles').upsert([newStudent], { onConflict: 'id' });
+        if (error) console.warn('Supabase profile insert error:', error.message);
+      } catch (e) {
+        console.warn('Supabase profile insert network error:', e);
+      }
     }
 
     return newStudent;
   },
 
-  registerStudent(data: {
+  async registerStudent(data: {
     full_name: string;
     gender: 'male' | 'female' | 'Laki-laki' | 'Perempuan';
     class_name: string;
     username: string;
     password: string;
-  }): Profile {
-    return this.createStudent(
+  }): Promise<Profile> {
+    return await this.createStudent(
       data.full_name,
       undefined,
       data.gender,
@@ -446,62 +458,157 @@ export const store = {
     );
   },
 
-  bulkCreateStudents(
+  async bulkCreateStudents(
     classId: string = 'class-1',
     names: string[],
     className: string = '7A',
     defaultPassword: string = '123456'
-  ): Profile[] {
+  ): Promise<Profile[]> {
     const newProfiles: Profile[] = [];
-    names.forEach(name => {
+    for (const name of names) {
       if (name.trim()) {
-        const student = this.createStudent(name.trim(), undefined, 'male', className, undefined, defaultPassword);
+        const student = await this.createStudent(name.trim(), undefined, 'male', className, undefined, defaultPassword);
         newProfiles.push(student);
       }
-    });
+    }
     return newProfiles;
+  },
+
+  // Force-fetch profiles from Supabase and merge with local (always gets latest cloud data)
+  async forceSyncProfiles(): Promise<Profile[]> {
+    if (!supabase) return this.getProfiles();
+    try {
+      const { data: dbProfiles, error } = await supabase.from('profiles').select('*');
+      if (error) {
+        console.warn('Supabase forceSyncProfiles error:', error.message);
+        return this.getProfiles();
+      }
+
+      const local = this.getProfiles();
+      const mergedMap = new Map<string, Profile>();
+
+      // Start with local data
+      local.forEach(p => mergedMap.set(p.id, p));
+
+      // Cloud data overwrites (it's the source of truth for cross-device)
+      if (dbProfiles && dbProfiles.length > 0) {
+        dbProfiles.forEach((p: any) => mergedMap.set(p.id, p));
+      }
+
+      // Also push any local-only profiles to Supabase (e.g. default teacher profile)
+      const cloudIds = new Set((dbProfiles || []).map((p: any) => p.id));
+      const localOnly = local.filter(p => !cloudIds.has(p.id));
+      if (localOnly.length > 0) {
+        await supabase.from('profiles').upsert(localOnly, { onConflict: 'id' }).then(({ error }) => {
+          if (error) console.warn('Supabase push local profiles error:', error.message);
+        });
+      }
+
+      const merged = Array.from(mergedMap.values());
+      setStored('profiles', merged);
+      return merged;
+    } catch (e) {
+      console.warn('forceSyncProfiles network error:', e);
+      return this.getProfiles();
+    }
   },
 
   async syncWithSupabase(): Promise<void> {
     if (!supabase) return;
     try {
-      // 1. Sync profiles
-      const { data: dbProfiles, error: pErr } = await supabase.from('profiles').select('*');
-      if (dbProfiles && dbProfiles.length > 0) {
-        const local = this.getProfiles();
-        const mergedMap = new Map<string, Profile>();
-        local.forEach(p => mergedMap.set(p.id, p));
-        dbProfiles.forEach((p: any) => mergedMap.set(p.id, p));
-        setStored('profiles', Array.from(mergedMap.values()));
-      }
+      // 1. Bidirectional sync profiles
+      await this.forceSyncProfiles();
 
-      // 2. Sync meetings
+      // 2. Sync meetings (bidirectional)
       const { data: dbMeetings } = await supabase.from('meetings').select('*').order('session_number', { ascending: true });
+      const localMeetings = this.getMeetings();
       if (dbMeetings && dbMeetings.length > 0) {
-        setStored('meetings', dbMeetings);
+        const meetingMap = new Map<string, Meeting>();
+        localMeetings.forEach(m => meetingMap.set(m.id, m));
+        dbMeetings.forEach((m: any) => meetingMap.set(m.id, m));
+        // Push local-only meetings to cloud
+        const cloudMeetingIds = new Set(dbMeetings.map((m: any) => m.id));
+        const localOnlyMeetings = localMeetings.filter(m => !cloudMeetingIds.has(m.id));
+        if (localOnlyMeetings.length > 0) {
+          await supabase.from('meetings').upsert(localOnlyMeetings.map(m => ({
+            id: m.id, class_id: m.class_id, session_number: m.session_number,
+            title: m.title, description: m.description, banner_url: m.banner_url,
+            meeting_date: m.meeting_date, is_active: m.is_active, created_at: m.created_at,
+          })), { onConflict: 'id' });
+        }
+        setStored('meetings', Array.from(meetingMap.values()));
+      } else if (localMeetings.length > 0) {
+        // No cloud meetings, push all local ones
+        await supabase.from('meetings').upsert(localMeetings.map(m => ({
+          id: m.id, class_id: m.class_id, session_number: m.session_number,
+          title: m.title, description: m.description, banner_url: m.banner_url,
+          meeting_date: m.meeting_date, is_active: m.is_active, created_at: m.created_at,
+        })), { onConflict: 'id' });
       }
 
-      // 3. Sync user projects
+      // 3. Sync user projects (bidirectional)
       const { data: dbProjects } = await supabase.from('user_projects').select('*, project_files(*)');
+      const localProjects = getStored<UserProject[]>('user_projects', INITIAL_PROJECTS);
+      
       if (dbProjects && dbProjects.length > 0) {
-        const formatted = dbProjects.map((p: any) => ({
-          id: p.id,
-          student_id: p.student_id,
-          meeting_id: p.meeting_id,
-          name: p.name,
-          description: p.description,
-          created_at: p.created_at,
-          updated_at: p.updated_at,
-          files: (p.project_files || []).map((f: any) => ({
-            id: f.id,
-            name: f.name,
-            content: f.content,
-            language: f.language,
-            mime_type: f.mime_type,
-            updated_at: f.updated_at,
-          }))
-        }));
-        setStored('user_projects', formatted);
+        const projMap = new Map<string, UserProject>();
+        localProjects.forEach(p => projMap.set(p.id, p));
+        dbProjects.forEach((p: any) => {
+          projMap.set(p.id, {
+            id: p.id,
+            student_id: p.student_id,
+            meeting_id: p.meeting_id,
+            name: p.name,
+            description: p.description,
+            created_at: p.created_at,
+            updated_at: p.updated_at,
+            files: (p.project_files || []).map((f: any) => ({
+              id: f.id, name: f.name, content: f.content,
+              language: f.language, mime_type: f.mime_type, updated_at: f.updated_at,
+            }))
+          });
+        });
+
+        // Push local-only projects
+        const cloudProjIds = new Set(dbProjects.map((p: any) => p.id));
+        const localOnlyProjects = localProjects.filter(p => !cloudProjIds.has(p.id));
+        for (const proj of localOnlyProjects) {
+          await supabase.from('user_projects').upsert([{
+            id: proj.id, student_id: proj.student_id,
+            meeting_id: proj.meeting_id || null, name: proj.name,
+            description: proj.description, created_at: proj.created_at,
+          }], { onConflict: 'id' });
+          // Push files for local-only projects
+          if (proj.files && proj.files.length > 0) {
+            await supabase.from('project_files').upsert(
+              proj.files.map(f => ({
+                id: f.id, project_id: proj.id, name: f.name,
+                content: f.content, language: f.language,
+              })),
+              { onConflict: 'id' }
+            );
+          }
+        }
+
+        setStored('user_projects', Array.from(projMap.values()));
+      } else if (localProjects.length > 0) {
+        // Push all local projects to cloud
+        for (const proj of localProjects) {
+          await supabase.from('user_projects').upsert([{
+            id: proj.id, student_id: proj.student_id,
+            meeting_id: proj.meeting_id || null, name: proj.name,
+            description: proj.description, created_at: proj.created_at,
+          }], { onConflict: 'id' });
+          if (proj.files && proj.files.length > 0) {
+            await supabase.from('project_files').upsert(
+              proj.files.map(f => ({
+                id: f.id, project_id: proj.id, name: f.name,
+                content: f.content, language: f.language,
+              })),
+              { onConflict: 'id' }
+            );
+          }
+        }
       }
     } catch (e) {
       console.warn('Supabase sync notice:', e);

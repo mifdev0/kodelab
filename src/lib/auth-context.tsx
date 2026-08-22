@@ -16,11 +16,11 @@ interface RegisterStudentData {
 interface AuthContextType {
   user: Profile | null;
   isLoading: boolean;
-  loginStudent: (username: string, password?: string) => boolean;
-  loginTeacher: (emailOrUsername: string, password?: string) => boolean;
-  loginAsStudent: (username: string) => boolean;
-  loginAsTeacher: (email: string) => boolean;
-  registerStudent: (data: RegisterStudentData) => boolean;
+  loginStudent: (username: string, password?: string) => Promise<boolean>;
+  loginTeacher: (emailOrUsername: string, password?: string) => Promise<boolean>;
+  loginAsStudent: (username: string) => Promise<boolean>;
+  loginAsTeacher: (email: string) => Promise<boolean>;
+  registerStudent: (data: RegisterStudentData) => Promise<boolean>;
   logout: () => void;
   allProfiles: Profile[];
 }
@@ -34,10 +34,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
 
   useEffect(() => {
-    // 1. Trigger background Supabase sync
-    store.syncWithSupabase().catch(() => {});
-
-    // 2. Load persisted user on mount
+    // 1. Load persisted user immediately from local data
     try {
       const storedId = localStorage.getItem('codecamp_current_user_id');
       const profiles = store.getProfiles();
@@ -56,9 +53,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } finally {
       setIsLoading(false);
     }
+
+    // 2. Trigger background Supabase sync (will update local data for next reads)
+    store.syncWithSupabase().then(() => {
+      // Re-check user after sync in case profile was updated
+      const storedId = localStorage.getItem('codecamp_current_user_id');
+      if (storedId) {
+        const found = store.getProfiles().find(p => p.id === storedId);
+        if (found) setUser(found);
+      }
+    }).catch(() => {});
   }, []);
 
-  const loginStudent = (username: string, password?: string): boolean => {
+  const loginStudent = async (username: string, password?: string): Promise<boolean> => {
+    // Force sync from Supabase before login so instructor-created accounts are available
+    await store.forceSyncProfiles();
+    
     const profiles = store.getProfiles();
     const cleanUser = username.trim().toLowerCase();
     const cleanPass = password?.trim();
@@ -82,7 +92,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return false;
   };
 
-  const loginTeacher = (emailOrUsername: string, password?: string): boolean => {
+  const loginTeacher = async (emailOrUsername: string, password?: string): Promise<boolean> => {
+    // Force sync from Supabase before login
+    await store.forceSyncProfiles();
+
     const profiles = store.getProfiles();
     const cleanInput = emailOrUsername.trim().toLowerCase();
     const cleanPass = password?.trim();
@@ -108,9 +121,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return false;
   };
 
-  const registerStudent = (data: RegisterStudentData): boolean => {
+  const registerStudent = async (data: RegisterStudentData): Promise<boolean> => {
     try {
-      const created = store.registerStudent(data);
+      const created = await store.registerStudent(data);
       setUser(created);
       localStorage.setItem('codecamp_current_user_id', created.id);
       router.push('/dashboard');

@@ -89,17 +89,30 @@ export default function StudentsManagement() {
   const [nameListInput, setNameListInput] = useState('');
   const [createdToast, setCreatedToast] = useState<string | null>(null);
 
+  const [isSyncing, setIsSyncing] = useState(false);
+
   useEffect(() => {
-    loadStudents();
-    store.syncWithSupabase().then(() => {
+    loadStudents(); // show local data immediately
+    // Then force-sync from Supabase to get cross-device data
+    setIsSyncing(true);
+    store.forceSyncProfiles().then(() => {
       loadStudents();
-    });
+      setIsSyncing(false);
+    }).catch(() => setIsSyncing(false));
   }, []);
 
   const loadStudents = () => {
     const list = store.getStudentsWithStats();
     setStudents(list);
   };
+
+  // Periodic background sync every 15 seconds to catch new registrations
+  useEffect(() => {
+    const interval = setInterval(() => {
+      store.forceSyncProfiles().then(() => loadStudents());
+    }, 15000);
+    return () => clearInterval(interval);
+  }, []);
 
   const handleNameChange = (val: string) => {
     setNewStudentName(val);
@@ -121,11 +134,11 @@ export default function StudentsManagement() {
     }
   };
 
-  const handleCreateSingleStudent = (e: React.FormEvent) => {
+  const handleCreateSingleStudent = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newStudentName.trim()) return;
 
-    store.createStudent(
+    await store.createStudent(
       newStudentName.trim(),
       undefined,
       newStudentGender,
@@ -143,7 +156,7 @@ export default function StudentsManagement() {
     setTimeout(() => setCreatedToast(null), 3500);
   };
 
-  const handleBulkCreate = (e: React.FormEvent) => {
+  const handleBulkCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     const rawNames = nameListInput
       .split('\n')
@@ -152,7 +165,7 @@ export default function StudentsManagement() {
 
     if (rawNames.length === 0) return;
 
-    const newCreated = store.bulkCreateStudents('class-1', rawNames, bulkClassName);
+    const newCreated = await store.bulkCreateStudents('class-1', rawNames, bulkClassName);
     setNameListInput('');
     setIsBulkModalOpen(false);
     loadStudents();
@@ -180,11 +193,11 @@ export default function StudentsManagement() {
   };
 
   // Save Edit Student
-  const handleSaveEdit = (e: React.FormEvent) => {
+  const handleSaveEdit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingStudent || !editFullName.trim() || !editUsername.trim()) return;
 
-    store.updateStudentProfile(editingStudent.id, {
+    await store.updateStudentProfile(editingStudent.id, {
       full_name: editFullName.trim(),
       gender: editGender,
       class_name: editClassName.trim(),
@@ -205,11 +218,11 @@ export default function StudentsManagement() {
   };
 
   // Save Reset Password
-  const handleSaveResetPassword = (e: React.FormEvent) => {
+  const handleSaveResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!resettingPasswordStudent || !newPasswordInput.trim()) return;
 
-    store.resetStudentPassword(resettingPasswordStudent.id, newPasswordInput.trim());
+    await store.resetStudentPassword(resettingPasswordStudent.id, newPasswordInput.trim());
     setResettingPasswordStudent(null);
     loadStudents();
     setCreatedToast(`Password for ${resettingPasswordStudent.full_name} updated successfully!`);
@@ -224,8 +237,8 @@ export default function StudentsManagement() {
       message: `Are you sure you want to permanently delete student account "${student.full_name}" (@${student.username})? All associated projects and submissions will also be removed.`,
       confirmText: 'Delete Account',
       confirmVariant: 'danger',
-      onConfirm: () => {
-        store.deleteStudent(student.id);
+      onConfirm: async () => {
+        await store.deleteStudent(student.id);
         setConfirmDialog(prev => ({ ...prev, isOpen: false }));
         loadStudents();
         setCreatedToast(`Student account "${student.full_name}" deleted.`);

@@ -41,6 +41,7 @@ function LoginContent() {
   const [regClassName, setRegClassName] = useState('7A');
   const [regUsername, setRegUsername] = useState('');
   const [regPassword, setRegPassword] = useState('');
+  const [isRegistering, setIsRegistering] = useState(false);
 
   useEffect(() => {
     const r = searchParams.get('role');
@@ -70,33 +71,33 @@ function LoginContent() {
     }
   };
 
-  const handleStudentLogin = (e: React.FormEvent) => {
+  const handleStudentLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
     if (!username.trim()) {
       setErrorMsg('Please enter your student username.');
       return;
     }
-    const success = loginStudent(username.trim(), password);
+    const success = await loginStudent(username.trim(), password);
     if (!success) {
       setErrorMsg('Invalid student username or password.');
     }
   };
 
-  const handleTeacherLogin = (e: React.FormEvent) => {
+  const handleTeacherLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
     if (!email.trim()) {
       setErrorMsg('Please enter instructor email or username.');
       return;
     }
-    const success = loginTeacher(email.trim(), password);
+    const success = await loginTeacher(email.trim(), password);
     if (!success) {
       setErrorMsg('Invalid instructor credentials.');
     }
   };
 
-  const handleStudentRegister = (e: React.FormEvent) => {
+  const handleStudentRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
     if (!regFullName.trim()) {
@@ -116,16 +117,23 @@ function LoginContent() {
       return;
     }
 
-    const success = registerStudent({
-      full_name: regFullName.trim(),
-      gender: regGender,
-      class_name: regClassName.trim(),
-      username: regUsername.trim().toLowerCase(),
-      password: regPassword.trim(),
-    });
+    setIsRegistering(true);
+    try {
+      const success = await registerStudent({
+        full_name: regFullName.trim(),
+        gender: regGender,
+        class_name: regClassName.trim(),
+        username: regUsername.trim().toLowerCase(),
+        password: regPassword.trim(),
+      });
 
-    if (!success) {
-      setErrorMsg('Registration failed. Username may already exist.');
+      if (!success) {
+        setErrorMsg('Registration failed. Username may already exist.');
+      }
+    } catch (err) {
+      setErrorMsg('Registration failed. Please try again.');
+    } finally {
+      setIsRegistering(false);
     }
   };
 
