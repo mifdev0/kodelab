@@ -158,13 +158,13 @@ export const store = {
     return this.getMeetings().find(m => m.id === meetingId);
   },
 
-  createMeeting(
+  async createMeeting(
     title: string,
     description: string = '',
     meeting_date: string = new Date().toISOString().split('T')[0],
     classId: string = 'class-1',
     banner_url?: string
-  ): Meeting {
+  ): Promise<Meeting> {
     const meetings = this.getMeetings();
     const nextSessionNum = meetings.length > 0
       ? Math.max(...meetings.map(m => m.session_number || 0)) + 1
@@ -191,15 +191,19 @@ export const store = {
 
     // Sync to Supabase
     if (supabase) {
-      supabase.from('meetings').insert([newMeeting]).then(({ error }) => {
-        if (error) console.warn('Supabase meeting sync notice:', error.message);
-      });
+      try {
+        await supabase.from('meetings').update({ is_active: false }).neq('id', newMeeting.id);
+        const { error } = await supabase.from('meetings').upsert([newMeeting], { onConflict: 'id' });
+        if (error) console.warn('Supabase meeting insert error:', error.message);
+      } catch (e) {
+        console.warn('Supabase meeting sync error:', e);
+      }
     }
 
     return newMeeting;
   },
 
-  updateMeetingBanner(meetingId: string, bannerUrl: string): Meeting | undefined {
+  async updateMeetingBanner(meetingId: string, bannerUrl: string): Promise<Meeting | undefined> {
     const meetings = this.getMeetings();
     let updatedMeeting: Meeting | undefined;
     const updated = meetings.map(m => {
@@ -212,13 +216,17 @@ export const store = {
     setStored('meetings', updated);
 
     if (supabase) {
-      supabase.from('meetings').update({ banner_url: bannerUrl }).eq('id', meetingId).then(() => {});
+      try {
+        await supabase.from('meetings').update({ banner_url: bannerUrl }).eq('id', meetingId);
+      } catch (e) {
+        console.warn('Supabase banner update error:', e);
+      }
     }
 
     return updatedMeeting;
   },
 
-  deleteMeeting(meetingId: string): void {
+  async deleteMeeting(meetingId: string): Promise<void> {
     const meetings = this.getMeetings();
     const filtered = meetings.filter(m => m.id !== meetingId);
     setStored('meetings', filtered);
@@ -230,11 +238,15 @@ export const store = {
 
     // Sync deletion to Supabase
     if (supabase) {
-      supabase.from('meetings').delete().eq('id', meetingId).then(() => {});
+      try {
+        await supabase.from('meetings').delete().eq('id', meetingId);
+      } catch (e) {
+        console.warn('Supabase meeting delete error:', e);
+      }
     }
   },
 
-  setActiveMeeting(meetingId: string): void {
+  async setActiveMeeting(meetingId: string): Promise<void> {
     const meetings = this.getMeetings();
     const updated = meetings.map(m => ({
       ...m,
@@ -244,12 +256,16 @@ export const store = {
 
     // Sync to Supabase
     if (supabase) {
-      supabase.from('meetings').update({ is_active: true }).eq('id', meetingId).then(() => {});
-      supabase.from('meetings').update({ is_active: false }).neq('id', meetingId).then(() => {});
+      try {
+        await supabase.from('meetings').update({ is_active: false }).neq('id', meetingId);
+        await supabase.from('meetings').update({ is_active: true }).eq('id', meetingId);
+      } catch (e) {
+        console.warn('Supabase meeting set active error:', e);
+      }
     }
   },
 
-  toggleMeetingStatus(meetingId: string): boolean {
+  async toggleMeetingStatus(meetingId: string): Promise<boolean> {
     const meetings = this.getMeetings();
     let newStatus = false;
     const updated = meetings.map(m => {
@@ -263,7 +279,11 @@ export const store = {
 
     // Sync to Supabase
     if (supabase) {
-      supabase.from('meetings').update({ is_active: newStatus }).eq('id', meetingId).then(() => {});
+      try {
+        await supabase.from('meetings').update({ is_active: newStatus }).eq('id', meetingId);
+      } catch (e) {
+        console.warn('Supabase meeting toggle status error:', e);
+      }
     }
 
     return newStatus;

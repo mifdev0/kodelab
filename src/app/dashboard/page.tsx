@@ -77,10 +77,32 @@ export default function TeacherSessionsDashboard() {
     onConfirm: () => {},
   });
 
-  // Initial Load
+  // Initial Load & Realtime Sync
   useEffect(() => {
     loadData();
-  }, []);
+    // Force sync fresh meetings and projects from Supabase
+    store.syncWithSupabase().then(() => {
+      loadData();
+    }).catch(() => {});
+
+    // Periodic sync every 12 seconds for multi-device realtime updates
+    const interval = setInterval(() => {
+      store.syncWithSupabase().then(() => {
+        const list = store.getMeetings();
+        setMeetings(list);
+        if (selectedMeetingId) {
+          const projs = store.getProjectsByMeeting(selectedMeetingId);
+          setSessionProjects(projs);
+        } else if (list.length > 0) {
+          const active = list.find(m => m.is_active) || list[0];
+          setSelectedMeetingId(active.id);
+          setSessionProjects(store.getProjectsByMeeting(active.id));
+        }
+      }).catch(() => {});
+    }, 12000);
+
+    return () => clearInterval(interval);
+  }, [selectedMeetingId]);
 
   const loadData = () => {
     const list = store.getMeetings();
@@ -103,18 +125,18 @@ export default function TeacherSessionsDashboard() {
     loadProjectsForMeeting(meetingId);
   };
 
-  const handleToggleSessionStatus = (meetingId: string, e: React.MouseEvent) => {
+  const handleToggleSessionStatus = async (meetingId: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    store.toggleMeetingStatus(meetingId);
+    await store.toggleMeetingStatus(meetingId);
     const updated = store.getMeetings();
     setMeetings(updated);
   };
 
-  const handleCreateSession = (e: React.FormEvent) => {
+  const handleCreateSession = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newSessionTitle.trim()) return;
 
-    const created = store.createMeeting(
+    const created = await store.createMeeting(
       newSessionTitle.trim(),
       newSessionDesc.trim(),
       newSessionDate,
@@ -150,9 +172,9 @@ export default function TeacherSessionsDashboard() {
     reader.readAsDataURL(file);
   };
 
-  const handleSaveBanner = () => {
+  const handleSaveBanner = async () => {
     if (!editingBannerMeeting || !bannerPreview) return;
-    store.updateMeetingBanner(editingBannerMeeting.id, bannerPreview);
+    await store.updateMeetingBanner(editingBannerMeeting.id, bannerPreview);
     const updated = store.getMeetings();
     setMeetings(updated);
     setIsBannerModalOpen(false);
@@ -170,8 +192,8 @@ export default function TeacherSessionsDashboard() {
       confirmText: 'Delete Session',
       confirmVariant: 'danger',
       showCancel: true,
-      onConfirm: () => {
-        store.deleteMeeting(meetingId);
+      onConfirm: async () => {
+        await store.deleteMeeting(meetingId);
         const updated = store.getMeetings();
         setMeetings(updated);
         if (selectedMeetingId === meetingId) {
@@ -189,12 +211,12 @@ export default function TeacherSessionsDashboard() {
     });
   };
 
-  const handleCreateFolderInSession = (e: React.FormEvent) => {
+  const handleCreateFolderInSession = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newFolderName.trim() || !selectedMeetingId) return;
 
     const authorId = user?.id || 'teacher-1';
-    const newProj = store.createUserProject(
+    const newProj = await store.createUserProject(
       authorId,
       newFolderName.trim(),
       newFolderDesc.trim(),

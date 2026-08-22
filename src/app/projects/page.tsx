@@ -44,6 +44,9 @@ export default function ProjectsPage() {
 
   useEffect(() => {
     loadProjects();
+    store.syncWithSupabase().then(() => {
+      loadProjects();
+    }).catch(() => {});
   }, [user]);
 
   const loadProjects = () => {
@@ -52,11 +55,11 @@ export default function ProjectsPage() {
     setProjects(userProjects);
   };
 
-  const handleCreateProject = (e: React.FormEvent) => {
+  const handleCreateProject = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newProjectName.trim() || !user) return;
 
-    const newProj = store.createUserProject(
+    const newProj = await store.createUserProject(
       user.id,
       newProjectName.trim(),
       newProjectDesc.trim(),
@@ -101,8 +104,8 @@ export default function ProjectsPage() {
       confirmText: 'Delete Folder',
       confirmVariant: 'danger',
       showCancel: true,
-      onConfirm: () => {
-        store.deleteUserProject(projectId);
+      onConfirm: async () => {
+        await store.deleteUserProject(projectId);
         loadProjects();
         setConfirmDialog(prev => ({ ...prev, isOpen: false }));
       },
@@ -115,7 +118,7 @@ export default function ProjectsPage() {
     setIsAddFileModalOpen(true);
   };
 
-  const handleAddFileSubmit = (e: React.FormEvent) => {
+  const handleAddFileSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!targetProjectId || !newFileNameInput.trim()) return;
 
@@ -124,7 +127,7 @@ export default function ProjectsPage() {
       cleanName = `${cleanName}.html`;
     }
 
-    store.addProjectFile(targetProjectId, cleanName, '');
+    await store.addProjectFile(targetProjectId, cleanName, '');
     setIsAddFileModalOpen(false);
     setNewFileNameInput('');
     loadProjects();
