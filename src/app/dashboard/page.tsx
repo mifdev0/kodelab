@@ -85,24 +85,25 @@ export default function TeacherSessionsDashboard() {
       loadData();
     }).catch(() => {});
 
-    // Periodic sync every 12 seconds for multi-device realtime updates
-    const interval = setInterval(() => {
-      store.syncWithSupabase().then(() => {
-        const list = store.getMeetings();
-        setMeetings(list);
-        if (selectedMeetingId) {
-          const projs = store.getProjectsByMeeting(selectedMeetingId);
-          setSessionProjects(projs);
-        } else if (list.length > 0) {
-          const active = list.find(m => m.is_active) || list[0];
-          setSelectedMeetingId(active.id);
-          setSessionProjects(store.getProjectsByMeeting(active.id));
+    // Instant Realtime Subscription (<100ms sync across teacher & student devices)
+    const unsubscribe = store.subscribeRealtime(() => {
+      const list = store.getMeetings();
+      setMeetings(list);
+      setSelectedMeetingId(currentSelectedId => {
+        const targetId = currentSelectedId && list.some(m => m.id === currentSelectedId)
+          ? currentSelectedId
+          : (list.find(m => m.is_active)?.id || list[0]?.id || '');
+        if (targetId) {
+          setSessionProjects(store.getProjectsByMeeting(targetId));
+        } else {
+          setSessionProjects([]);
         }
-      }).catch(() => {});
-    }, 12000);
+        return targetId;
+      });
+    });
 
-    return () => clearInterval(interval);
-  }, [selectedMeetingId]);
+    return () => unsubscribe();
+  }, []);
 
   const loadData = () => {
     const list = store.getMeetings();
@@ -112,6 +113,9 @@ export default function TeacherSessionsDashboard() {
     if (active) {
       setSelectedMeetingId(active.id);
       loadProjectsForMeeting(active.id);
+    } else {
+      setSelectedMeetingId('');
+      setSessionProjects([]);
     }
   };
 

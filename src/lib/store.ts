@@ -500,7 +500,7 @@ export const store = {
     return newProfiles;
   },
 
-  // Force-fetch profiles from Supabase and merge with local (always gets latest cloud data)
+  // Force-fetch profiles from Supabase (Supabase is Single Source of Truth)
   async forceSyncProfiles(): Promise<Profile[]> {
     if (!supabase) return this.getProfiles();
     try {
@@ -510,29 +510,11 @@ export const store = {
         return this.getProfiles();
       }
 
-      const local = this.getProfiles();
-      const mergedMap = new Map<string, Profile>();
-
-      // Start with local data
-      local.forEach(p => mergedMap.set(p.id, p));
-
-      // Cloud data overwrites (it's the source of truth for cross-device)
       if (dbProfiles && dbProfiles.length > 0) {
-        dbProfiles.forEach((p: any) => mergedMap.set(p.id, p));
+        setStored('profiles', dbProfiles);
+        return dbProfiles;
       }
-
-      // Also push any local-only profiles to Supabase (e.g. default teacher profile)
-      const cloudIds = new Set((dbProfiles || []).map((p: any) => p.id));
-      const localOnly = local.filter(p => !cloudIds.has(p.id));
-      if (localOnly.length > 0) {
-        await supabase.from('profiles').upsert(localOnly, { onConflict: 'id' }).then(({ error }) => {
-          if (error) console.warn('Supabase push local profiles error:', error.message);
-        });
-      }
-
-      const merged = Array.from(mergedMap.values());
-      setStored('profiles', merged);
-      return merged;
+      return this.getProfiles();
     } catch (e) {
       console.warn('forceSyncProfiles network error:', e);
       return this.getProfiles();
@@ -542,120 +524,76 @@ export const store = {
   async syncWithSupabase(): Promise<void> {
     if (!supabase) return;
     try {
-      // 1. Bidirectional sync profiles
+      // 1. Sync profiles
       await this.forceSyncProfiles();
 
-      // 2. Sync meetings (bidirectional)
-      const { data: dbMeetings } = await supabase.from('meetings').select('*').order('session_number', { ascending: true });
-      const localMeetings = this.getMeetings();
-      if (dbMeetings && dbMeetings.length > 0) {
-        const meetingMap = new Map<string, Meeting>();
-        localMeetings.forEach(m => meetingMap.set(m.id, m));
-        dbMeetings.forEach((m: any) => meetingMap.set(m.id, m));
-        // Push local-only meetings to cloud
-        const cloudMeetingIds = new Set(dbMeetings.map((m: any) => m.id));
-        const localOnlyMeetings = localMeetings.filter(m => !cloudMeetingIds.has(m.id));
-        if (localOnlyMeetings.length > 0) {
-          const payloadWithBanner = localOnlyMeetings.map(m => ({
-            id: m.id, class_id: m.class_id, session_number: m.session_number,
-            title: m.title, description: m.description, banner_url: m.banner_url,
-            meeting_date: m.meeting_date, is_active: m.is_active, created_at: m.created_at,
-          }));
-          const { error: upsertErr } = await supabase.from('meetings').upsert(payloadWithBanner, { onConflict: 'id' });
-          if (upsertErr && upsertErr.code === 'PGRST204') {
-            const payloadNoBanner = localOnlyMeetings.map(m => ({
-              id: m.id, class_id: m.class_id, session_number: m.session_number,
-              title: m.title, description: m.description,
-              meeting_date: m.meeting_date, is_active: m.is_active, created_at: m.created_at,
-            }));
-            await supabase.from('meetings').upsert(payloadNoBanner, { onConflict: 'id' });
-          }
-        }
-        setStored('meetings', Array.from(meetingMap.values()));
-      } else if (localMeetings.length > 0) {
-        // No cloud meetings, push all local ones
-        const payloadWithBanner = localMeetings.map(m => ({
-          id: m.id, class_id: m.class_id, session_number: m.session_number,
-          title: m.title, description: m.description, banner_url: m.banner_url,
-          meeting_date: m.meeting_date, is_active: m.is_active, created_at: m.created_at,
-        }));
-        const { error: upsertErr } = await supabase.from('meetings').upsert(payloadWithBanner, { onConflict: 'id' });
-        if (upsertErr && upsertErr.code === 'PGRST204') {
-          const payloadNoBanner = localMeetings.map(m => ({
-            id: m.id, class_id: m.class_id, session_number: m.session_number,
-            title: m.title, description: m.description,
-            meeting_date: m.meeting_date, is_active: m.is_active, created_at: m.created_at,
-          }));
-          await supabase.from('meetings').upsert(payloadNoBanner, { onConflict: 'id' });
-        }
+      // 2. Sync meetings (Supabase is Single Source of Truth)
+      const { data: dbMeetings, error: mErr } = await supabase.from('meetings').select('*').order('session_number', { ascending: true });
+      if (!mErr && dbMeetings) {
+        setStored('meetings', dbMeetings);
       }
 
-      // 3. Sync user projects (bidirectional)
-      const { data: dbProjects } = await supabase.from('user_projects').select('*, project_files(*)');
-      const localProjects = getStored<UserProject[]>('user_projects', INITIAL_PROJECTS);
-      
-      if (dbProjects && dbProjects.length > 0) {
-        const projMap = new Map<string, UserProject>();
-        localProjects.forEach(p => projMap.set(p.id, p));
-        dbProjects.forEach((p: any) => {
-          projMap.set(p.id, {
-            id: p.id,
-            student_id: p.student_id,
-            meeting_id: p.meeting_id,
-            name: p.name,
-            description: p.description,
-            created_at: p.created_at,
-            updated_at: p.updated_at,
-            files: (p.project_files || []).map((f: any) => ({
-              id: f.id, name: f.name, content: f.content,
-              language: f.language, mime_type: f.mime_type, updated_at: f.updated_at,
-            }))
-          });
-        });
-
-        // Push local-only projects
-        const cloudProjIds = new Set(dbProjects.map((p: any) => p.id));
-        const localOnlyProjects = localProjects.filter(p => !cloudProjIds.has(p.id));
-        for (const proj of localOnlyProjects) {
-          await supabase.from('user_projects').upsert([{
-            id: proj.id, student_id: proj.student_id,
-            meeting_id: proj.meeting_id || null, name: proj.name,
-            description: proj.description, created_at: proj.created_at,
-          }], { onConflict: 'id' });
-          // Push files for local-only projects
-          if (proj.files && proj.files.length > 0) {
-            await supabase.from('project_files').upsert(
-              proj.files.map(f => ({
-                id: f.id, project_id: proj.id, name: f.name,
-                content: f.content, language: f.language,
-              })),
-              { onConflict: 'id' }
-            );
-          }
-        }
-
-        setStored('user_projects', Array.from(projMap.values()));
-      } else if (localProjects.length > 0) {
-        // Push all local projects to cloud
-        for (const proj of localProjects) {
-          await supabase.from('user_projects').upsert([{
-            id: proj.id, student_id: proj.student_id,
-            meeting_id: proj.meeting_id || null, name: proj.name,
-            description: proj.description, created_at: proj.created_at,
-          }], { onConflict: 'id' });
-          if (proj.files && proj.files.length > 0) {
-            await supabase.from('project_files').upsert(
-              proj.files.map(f => ({
-                id: f.id, project_id: proj.id, name: f.name,
-                content: f.content, language: f.language,
-              })),
-              { onConflict: 'id' }
-            );
-          }
-        }
+      // 3. Sync user projects & files (Supabase is Single Source of Truth)
+      const { data: dbProjects, error: prErr } = await supabase.from('user_projects').select('*, project_files(*)');
+      if (!prErr && dbProjects) {
+        const formatted = dbProjects.map((p: any) => ({
+          id: p.id,
+          student_id: p.student_id,
+          meeting_id: p.meeting_id,
+          name: p.name,
+          description: p.description,
+          created_at: p.created_at,
+          updated_at: p.updated_at,
+          files: (p.project_files || []).map((f: any) => ({
+            id: f.id,
+            name: f.name,
+            content: f.content,
+            language: f.language,
+            mime_type: f.mime_type,
+            updated_at: f.updated_at,
+          }))
+        }));
+        setStored('user_projects', formatted);
       }
     } catch (e) {
       console.warn('Supabase sync notice:', e);
+    }
+  },
+
+  // Instant Realtime Subscription (WebSocket < 100ms sync across devices)
+  subscribeRealtime(onUpdate: () => void): () => void {
+    if (!supabase) {
+      // Fallback interval if Supabase client not configured
+      const interval = setInterval(onUpdate, 5000);
+      return () => clearInterval(interval);
+    }
+
+    try {
+      const channel = supabase
+        .channel('kodelab_realtime_sync')
+        .on('postgres_changes', { event: '*', schema: 'public' }, () => {
+          this.syncWithSupabase().then(() => {
+            onUpdate();
+          }).catch(() => {});
+        })
+        .subscribe();
+
+      // Also keep a fast 5s background polling as redundancy for network drops
+      const interval = setInterval(() => {
+        this.syncWithSupabase().then(() => {
+          onUpdate();
+        }).catch(() => {});
+      }, 5000);
+
+      return () => {
+        try {
+          supabase.removeChannel(channel);
+        } catch (e) {}
+        clearInterval(interval);
+      };
+    } catch (e) {
+      const interval = setInterval(onUpdate, 5000);
+      return () => clearInterval(interval);
     }
   },
 

@@ -92,27 +92,25 @@ export default function StudentsManagement() {
   const [isSyncing, setIsSyncing] = useState(false);
 
   useEffect(() => {
-    loadStudents(); // show local data immediately
-    // Then force-sync from Supabase to get cross-device data
+    loadStudents();
     setIsSyncing(true);
     store.forceSyncProfiles().then(() => {
       loadStudents();
       setIsSyncing(false);
     }).catch(() => setIsSyncing(false));
+
+    // Instant Realtime Subscription for new student registrations, edits, or deletes
+    const unsubscribe = store.subscribeRealtime(() => {
+      loadStudents();
+    });
+
+    return () => unsubscribe();
   }, []);
 
   const loadStudents = () => {
     const list = store.getStudentsWithStats();
     setStudents(list);
   };
-
-  // Periodic background sync every 15 seconds to catch new registrations
-  useEffect(() => {
-    const interval = setInterval(() => {
-      store.forceSyncProfiles().then(() => loadStudents());
-    }, 15000);
-    return () => clearInterval(interval);
-  }, []);
 
   const handleNameChange = (val: string) => {
     setNewStudentName(val);

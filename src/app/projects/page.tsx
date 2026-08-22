@@ -47,6 +47,13 @@ export default function ProjectsPage() {
     store.syncWithSupabase().then(() => {
       loadProjects();
     }).catch(() => {});
+
+    // Instant Realtime Subscription
+    const unsubscribe = store.subscribeRealtime(() => {
+      loadProjects();
+    });
+
+    return () => unsubscribe();
   }, [user]);
 
   const loadProjects = () => {

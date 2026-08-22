@@ -46,7 +46,14 @@ function ParentShowcaseContent() {
     loadData();
     store.syncWithSupabase().then(() => {
       loadData();
+    }).catch(() => {});
+
+    // Instant Realtime Subscription
+    const unsubscribe = store.subscribeRealtime(() => {
+      loadData();
     });
+
+    return () => unsubscribe();
   }, []);
 
   const loadData = () => {
