@@ -43,10 +43,30 @@ function LoginContent() {
   const [regPassword, setRegPassword] = useState('');
   const [isRegistering, setIsRegistering] = useState(false);
 
+  // Remember Me / Saved Credentials state
+  const [rememberMe, setRememberMe] = useState(true);
+  const [savedStudentCreds, setSavedStudentCreds] = useState<{ username: string; password?: string; fullName?: string } | null>(null);
+
   useEffect(() => {
     const r = searchParams.get('role');
     if (r === 'teacher') setRole('teacher');
     else if (r === 'student') setRole('student');
+
+    // Load saved credentials from this device
+    try {
+      const raw = localStorage.getItem('kodelab_saved_creds');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed.role === 'student' && parsed.username) {
+          setSavedStudentCreds(parsed);
+          setUsername(parsed.username);
+          if (parsed.password) setPassword(parsed.password);
+        } else if (parsed.role === 'teacher' && parsed.email) {
+          setEmail(parsed.email);
+          if (parsed.password) setPassword(parsed.password);
+        }
+      }
+    } catch (e) {}
   }, [searchParams]);
 
   const handleNameChange = (val: string) => {
@@ -81,6 +101,17 @@ function LoginContent() {
     const success = await loginStudent(username.trim(), password);
     if (!success) {
       setErrorMsg('Invalid student username or password.');
+    } else {
+      // Save credentials on device if rememberMe is enabled
+      if (rememberMe) {
+        localStorage.setItem('kodelab_saved_creds', JSON.stringify({
+          username: username.trim(),
+          password,
+          role: 'student'
+        }));
+      } else {
+        localStorage.removeItem('kodelab_saved_creds');
+      }
     }
   };
 
@@ -94,6 +125,16 @@ function LoginContent() {
     const success = await loginTeacher(email.trim(), password);
     if (!success) {
       setErrorMsg('Invalid instructor credentials.');
+    } else {
+      if (rememberMe) {
+        localStorage.setItem('kodelab_saved_creds', JSON.stringify({
+          email: email.trim(),
+          password,
+          role: 'teacher'
+        }));
+      } else {
+        localStorage.removeItem('kodelab_saved_creds');
+      }
     }
   };
 
@@ -119,16 +160,28 @@ function LoginContent() {
 
     setIsRegistering(true);
     try {
+      const cleanUser = regUsername.trim().toLowerCase();
+      const cleanPass = regPassword.trim();
+      const cleanName = regFullName.trim();
+
       const success = await registerStudent({
-        full_name: regFullName.trim(),
+        full_name: cleanName,
         gender: regGender,
         class_name: regClassName.trim(),
-        username: regUsername.trim().toLowerCase(),
-        password: regPassword.trim(),
+        username: cleanUser,
+        password: cleanPass,
       });
 
       if (!success) {
         setErrorMsg('Registration failed. Username may already exist.');
+      } else {
+        // Auto-save registered credentials on device
+        localStorage.setItem('kodelab_saved_creds', JSON.stringify({
+          username: cleanUser,
+          password: cleanPass,
+          role: 'student',
+          fullName: cleanName
+        }));
       }
     } catch (err) {
       setErrorMsg('Registration failed. Please try again.');
@@ -277,6 +330,17 @@ function LoginContent() {
                   </div>
                 </div>
 
+                {/* Remember Me Checkbox */}
+                <label className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-400 cursor-pointer select-none pt-0.5">
+                  <input
+                    type="checkbox"
+                    checked={rememberMe}
+                    onChange={(e) => setRememberMe(e.target.checked)}
+                    className="rounded border-slate-300 dark:border-slate-700 text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5 accent-indigo-600 cursor-pointer"
+                  />
+                  <span>Remember me on this device</span>
+                </label>
+
                 <button
                   type="submit"
                   className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-md transition-colors"
@@ -381,6 +445,17 @@ function LoginContent() {
                   </div>
                 </div>
 
+                {/* Auto Save on Device */}
+                <label className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-400 cursor-pointer select-none pt-0.5">
+                  <input
+                    type="checkbox"
+                    checked={rememberMe}
+                    onChange={(e) => setRememberMe(e.target.checked)}
+                    className="rounded border-slate-300 dark:border-slate-700 text-primary focus:ring-primary w-3.5 h-3.5 accent-primary cursor-pointer"
+                  />
+                  <span>Save login on this device</span>
+                </label>
+
                 <button
                   type="submit"
                   className="w-full py-2.5 bg-primary text-white text-xs font-bold rounded-xl hover:bg-primary-hover shadow-md transition-colors mt-2"
@@ -391,6 +466,30 @@ function LoginContent() {
             ) : (
               /* Student Sign In */
               <form onSubmit={handleStudentLogin} className="space-y-4">
+                {/* Saved Device Account Quick Card */}
+                {savedStudentCreds && savedStudentCreds.username && (
+                  <div className="p-3 bg-primary/10 border border-primary/20 rounded-xl flex items-center justify-between">
+                    <div className="min-w-0">
+                      <span className="text-[10px] uppercase font-bold text-slate-400 dark:text-slate-500 block font-mono">
+                        Saved On Device
+                      </span>
+                      <span className="text-xs font-bold text-primary block truncate">
+                        @{savedStudentCreds.username} {savedStudentCreds.fullName ? `(${savedStudentCreds.fullName})` : ''}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setUsername(savedStudentCreds.username);
+                        if (savedStudentCreds.password) setPassword(savedStudentCreds.password);
+                      }}
+                      className="px-2.5 py-1 bg-primary text-white rounded-lg text-[11px] font-bold shrink-0 hover:bg-primary-hover shadow-xs transition-colors"
+                    >
+                      Fill ⚡
+                    </button>
+                  </div>
+                )}
+
                 <div className="space-y-1.5">
                   <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
                     Student Username
@@ -426,6 +525,17 @@ function LoginContent() {
                     </button>
                   </div>
                 </div>
+
+                {/* Remember Me Checkbox */}
+                <label className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-400 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={rememberMe}
+                    onChange={(e) => setRememberMe(e.target.checked)}
+                    className="rounded border-slate-300 dark:border-slate-700 text-primary focus:ring-primary w-3.5 h-3.5 accent-primary cursor-pointer"
+                  />
+                  <span>Remember me on this device</span>
+                </label>
 
                 <button
                   type="submit"

@@ -323,18 +323,32 @@ export default function UnifiedPortalGateway() {
             {theme === 'dark' ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-slate-700" />}
           </button>
 
-          {user && (
+          {user ? (
             <div className="flex items-center gap-2.5 text-xs pl-3 border-l border-slate-200 dark:border-slate-800">
-              <span className="text-slate-600 dark:text-slate-400 hidden sm:inline">
-                Logged in as <strong>{user.full_name}</strong>
+              <span className="text-slate-600 dark:text-slate-400 hidden md:inline text-xs">
+                Hi, <strong>{user.full_name}</strong>
               </span>
+              <Link
+                href="/dashboard"
+                className="px-3 py-1.5 rounded-xl bg-primary text-white font-bold text-xs hover:bg-primary-hover shadow-xs transition-colors flex items-center gap-1"
+              >
+                <span>Dashboard</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
               <button
                 onClick={() => logout()}
-                className="text-xs font-bold text-rose-500 hover:text-rose-600 px-2 py-1"
+                className="text-xs font-bold text-rose-500 hover:text-rose-600 px-1.5 py-1"
               >
                 Sign Out
               </button>
             </div>
+          ) : (
+            <Link
+              href="/login"
+              className="text-xs font-bold text-slate-700 dark:text-slate-200 hover:text-primary px-3 py-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            >
+              Sign In
+            </Link>
           )}
         </div>
       </header>
@@ -481,22 +495,39 @@ export default function UnifiedPortalGateway() {
                   </div>
 
                   {/* Action CTA Button when in Front */}
-                  {isFront && (
-                    <div className="pt-1">
-                      <Link
-                        href={item.href}
-                        onClick={(e) => e.stopPropagation()}
-                        className={`w-full py-2.5 px-4 rounded-xl text-white text-xs font-bold transition-all shadow-md flex items-center justify-center gap-2 ${
-                          item.accentColor === 'blue' ? 'bg-blue-600 hover:bg-blue-700 shadow-blue-500/20' :
-                          item.accentColor === 'indigo' ? 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-500/20' :
-                          'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/20'
-                        }`}
-                      >
-                        <span>{item.ctaText}</span>
-                        <ArrowRight className="w-4 h-4" />
-                      </Link>
-                    </div>
-                  )}
+                  {isFront && (() => {
+                    const isTargetActiveUser = Boolean(
+                      user && (
+                        (item.id === 'student' && user.role === 'student') ||
+                        (item.id === 'instructor' && user.role === 'teacher')
+                      )
+                    );
+                    const targetHref = item.id === 'recap'
+                      ? '/recap'
+                      : isTargetActiveUser
+                      ? '/dashboard'
+                      : item.href;
+                    const ctaLabel = isTargetActiveUser
+                      ? `Continue as ${user?.full_name?.split(' ')[0] || user?.username}`
+                      : item.ctaText;
+
+                    return (
+                      <div className="pt-1">
+                        <Link
+                          href={targetHref}
+                          onClick={(e) => e.stopPropagation()}
+                          className={`w-full py-2.5 px-4 rounded-xl text-white text-xs font-bold transition-all shadow-md flex items-center justify-center gap-2 ${
+                            item.accentColor === 'blue' ? 'bg-blue-600 hover:bg-blue-700 shadow-blue-500/20' :
+                            item.accentColor === 'indigo' ? 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-500/20' :
+                            'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/20'
+                          }`}
+                        >
+                          <span>{ctaLabel}</span>
+                          <ArrowRight className="w-4 h-4" />
+                        </Link>
+                      </div>
+                    );
+                  })()}
 
                 </div>
               </div>
