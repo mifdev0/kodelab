@@ -189,12 +189,18 @@ export const store = {
     updated.push(newMeeting);
     setStored('meetings', updated);
 
-    // Sync to Supabase
+    // Sync to Supabase with resilient fallback
     if (supabase) {
       try {
         await supabase.from('meetings').update({ is_active: false }).neq('id', newMeeting.id);
         const { error } = await supabase.from('meetings').upsert([newMeeting], { onConflict: 'id' });
-        if (error) console.warn('Supabase meeting insert error:', error.message);
+        if (error && error.code === 'PGRST204') {
+          // If banner_url column doesn't exist in user's Supabase yet, omit it and upsert
+          const { banner_url, ...mWithoutBanner } = newMeeting;
+          await supabase.from('meetings').upsert([mWithoutBanner], { onConflict: 'id' });
+        } else if (error) {
+          console.warn('Supabase meeting insert notice:', error.message);
+        }
       } catch (e) {
         console.warn('Supabase meeting sync error:', e);
       }
@@ -550,20 +556,38 @@ export const store = {
         const cloudMeetingIds = new Set(dbMeetings.map((m: any) => m.id));
         const localOnlyMeetings = localMeetings.filter(m => !cloudMeetingIds.has(m.id));
         if (localOnlyMeetings.length > 0) {
-          await supabase.from('meetings').upsert(localOnlyMeetings.map(m => ({
+          const payloadWithBanner = localOnlyMeetings.map(m => ({
             id: m.id, class_id: m.class_id, session_number: m.session_number,
             title: m.title, description: m.description, banner_url: m.banner_url,
             meeting_date: m.meeting_date, is_active: m.is_active, created_at: m.created_at,
-          })), { onConflict: 'id' });
+          }));
+          const { error: upsertErr } = await supabase.from('meetings').upsert(payloadWithBanner, { onConflict: 'id' });
+          if (upsertErr && upsertErr.code === 'PGRST204') {
+            const payloadNoBanner = localOnlyMeetings.map(m => ({
+              id: m.id, class_id: m.class_id, session_number: m.session_number,
+              title: m.title, description: m.description,
+              meeting_date: m.meeting_date, is_active: m.is_active, created_at: m.created_at,
+            }));
+            await supabase.from('meetings').upsert(payloadNoBanner, { onConflict: 'id' });
+          }
         }
         setStored('meetings', Array.from(meetingMap.values()));
       } else if (localMeetings.length > 0) {
         // No cloud meetings, push all local ones
-        await supabase.from('meetings').upsert(localMeetings.map(m => ({
+        const payloadWithBanner = localMeetings.map(m => ({
           id: m.id, class_id: m.class_id, session_number: m.session_number,
           title: m.title, description: m.description, banner_url: m.banner_url,
           meeting_date: m.meeting_date, is_active: m.is_active, created_at: m.created_at,
-        })), { onConflict: 'id' });
+        }));
+        const { error: upsertErr } = await supabase.from('meetings').upsert(payloadWithBanner, { onConflict: 'id' });
+        if (upsertErr && upsertErr.code === 'PGRST204') {
+          const payloadNoBanner = localMeetings.map(m => ({
+            id: m.id, class_id: m.class_id, session_number: m.session_number,
+            title: m.title, description: m.description,
+            meeting_date: m.meeting_date, is_active: m.is_active, created_at: m.created_at,
+          }));
+          await supabase.from('meetings').upsert(payloadNoBanner, { onConflict: 'id' });
+        }
       }
 
       // 3. Sync user projects (bidirectional)
