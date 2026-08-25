@@ -650,14 +650,23 @@ export default function TeacherSessionsDashboard() {
                       {filteredProjects.map((project) => {
                         const isTeacherOwner = project.student_id === 'teacher-1' || project.student?.role === 'teacher';
                         const isMyProject = user?.id === project.student_id;
+                        const canViewSourceCode = isTeacher || isMyProject;
                         const studentName = project.student?.full_name || (isTeacherOwner ? 'Mr. Miftah (Instructor)' : 'Student');
                         const fileNames = project.files.map(f => f.name).join(', ');
                         const canDelete = isTeacher || isMyProject;
 
+                        const handleCardClick = () => {
+                          if (canViewSourceCode) {
+                            router.push(`/projects/${project.id}`);
+                          } else {
+                            window.open(`/preview?project=${project.id}`, '_blank');
+                          }
+                        };
+
                         return (
                           <div
                             key={project.id}
-                            onClick={() => router.push(`/projects/${project.id}`)}
+                            onClick={handleCardClick}
                             className={`p-4 rounded-2xl border transition-all hover:shadow-md cursor-pointer group flex flex-col justify-between space-y-3 ${
                               isMyProject
                                 ? 'bg-primary-container/10 dark:bg-primary/5 border-primary/40 dark:border-primary/40 ring-1 ring-primary/20'
@@ -679,6 +688,11 @@ export default function TeacherSessionsDashboard() {
                                       {isMyProject && (
                                         <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-primary text-white">
                                           YOU
+                                        </span>
+                                      )}
+                                      {!canViewSourceCode && (
+                                        <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30">
+                                          🔒 Live Only
                                         </span>
                                       )}
                                     </div>
@@ -734,17 +748,22 @@ export default function TeacherSessionsDashboard() {
                                   title="Preview student website in a new tab"
                                 >
                                   <Globe className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-                                  <span>Live Web</span>
+                                  <span>{canViewSourceCode ? 'Live Web' : 'Live Preview'}</span>
                                 </button>
 
-                                <button
-                                  onClick={() => router.push(`/projects/${project.id}`)}
-                                  className="flex items-center gap-1 px-2.5 py-1 bg-primary/10 hover:bg-primary/20 text-primary dark:text-primary-light font-bold rounded-lg text-xs transition-colors border border-primary/20"
-                                  title="Inspect source code in Code Editor"
-                                >
-                                  <Code2 className="w-3.5 h-3.5" />
-                                  <span>{isMyProject ? 'Edit Code' : 'Source Code'}</span>
-                                </button>
+                                {canViewSourceCode && (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      router.push(`/projects/${project.id}`);
+                                    }}
+                                    className="flex items-center gap-1 px-2.5 py-1 bg-primary/10 hover:bg-primary/20 text-primary dark:text-primary-light font-bold rounded-lg text-xs transition-colors border border-primary/20"
+                                    title={isTeacher ? "Inspect student source code in Read-Only Mode" : "Open in Code Editor"}
+                                  >
+                                    <Code2 className="w-3.5 h-3.5" />
+                                    <span>{isMyProject ? 'Edit Code' : 'Inspect Code'}</span>
+                                  </button>
+                                )}
                               </div>
                             </div>
 

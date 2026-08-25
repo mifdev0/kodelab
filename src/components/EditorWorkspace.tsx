@@ -162,6 +162,11 @@ export default function EditorWorkspace({ initialMeetingId }: EditorWorkspacePro
         p => p.id === initialMeetingId || p.name.toLowerCase() === initialMeetingId.toLowerCase()
       );
       if (foundProj) {
+        // Anti-Cheating Protection: Students can only view their own code or teacher starters
+        if (user.role === 'student' && foundProj.student_id !== user.id && foundProj.student_id !== 'teacher-1') {
+          window.location.href = `/preview?project=${foundProj.id}`;
+          return;
+        }
         openCustomProjectFolder(foundProj);
         return;
       }
@@ -179,6 +184,11 @@ export default function EditorWorkspace({ initialMeetingId }: EditorWorkspacePro
 
   // Open a Folder
   const openCustomProjectFolder = (project: UserProject) => {
+    // Anti-Cheating Protection: Students cannot open other students' source code
+    if (user?.role === 'student' && project.student_id !== user.id && project.student_id !== 'teacher-1') {
+      window.location.href = `/preview?project=${project.id}`;
+      return;
+    }
     setActiveFolderId(project.id);
     setFolderName(project.name);
     setFiles(project.files || []);
