@@ -808,10 +808,6 @@ export default function EditorWorkspace({ initialMeetingId }: EditorWorkspacePro
                     </button>
                   )}
                 </div>
-
-                <div className="hidden md:flex items-center px-2 text-[11px] font-semibold text-on-surface-variant/70 dark:text-gray-400">
-                  <span>Type <kbd className="bg-surface-container dark:bg-gray-800 px-1 py-0.5 rounded text-primary">!</kbd> + <kbd className="bg-surface-container dark:bg-gray-800 px-1 py-0.5 rounded text-primary">Tab</kbd> in HTML</span>
-                </div>
               </header>
 
               {/* Sub-toolbar */}
