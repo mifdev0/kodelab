@@ -613,7 +613,13 @@ const matchingTagPlugin = ViewPlugin.fromClass(class {
   getMatchingTags(view: EditorView): DecorationSet {
     const { state } = view;
     const selection = state.selection.main;
-    const pos = selection.head;
+
+    // Only highlight tag pair when user double-clicks / selects a tag (ignore single click)
+    if (selection.empty) {
+      return Decoration.none;
+    }
+
+    const pos = selection.from;
     const tree = syntaxTree(state);
 
     if (!tree) return Decoration.none;
