@@ -210,10 +210,7 @@ function LivePreviewContent() {
 </html>`;
     }
 
-    content = content.replace(/<a\b(?![^>]*\btarget=)([^>]*)>/gi, '<a target="_blank" rel="noopener noreferrer" $1>');
-
     const headInjection = `
-  <base target="_blank">
   <style>
     /* Default font and baseline reset */
     html, body {
@@ -239,6 +236,7 @@ function LivePreviewContent() {
 
           e.preventDefault();
           e.stopPropagation();
+          if (e.stopImmediatePropagation) e.stopImmediatePropagation();
 
           // 1. In-page anchor link (e.g. #about)
           if (href.startsWith('#')) {
@@ -267,8 +265,9 @@ function LivePreviewContent() {
       }
     }
 
+    document.addEventListener('click', handleLinkClick, true);
     window.addEventListener('click', handleLinkClick, true);
-    window.addEventListener('auxclick', handleLinkClick, true);
+    document.addEventListener('auxclick', handleLinkClick, true);
 
     document.addEventListener('DOMContentLoaded', function() {
       try {

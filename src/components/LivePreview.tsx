@@ -132,11 +132,7 @@ export default function LivePreview({
 </html>`;
     }
 
-    // Pre-process all <a> tags to enforce target="_blank" and rel="noopener noreferrer"
-    content = content.replace(/<a\b(?![^>]*\btarget=)([^>]*)>/gi, '<a target="_blank" rel="noopener noreferrer" $1>');
-
     const headInjection = `
-  <base target="_blank">
   <style>
     /* Default font and baseline reset */
     html, body {
@@ -161,8 +157,10 @@ export default function LivePreview({
           var href = rawHref.trim();
           if (!href || href === '#' || href.startsWith('javascript:')) return;
 
+          // Prevent default browser navigation to /lain.html 404
           e.preventDefault();
           e.stopPropagation();
+          if (e.stopImmediatePropagation) e.stopImmediatePropagation();
 
           // 1. In-page anchor link (e.g. #about)
           if (href.startsWith('#')) {
@@ -190,8 +188,9 @@ export default function LivePreview({
         }
       }
     }
+    document.addEventListener('click', handleLinkClick, true);
     window.addEventListener('click', handleLinkClick, true);
-    window.addEventListener('auxclick', handleLinkClick, true);
+    document.addEventListener('auxclick', handleLinkClick, true);
 
     // Safely execute student JavaScript on load inside head
     document.addEventListener('DOMContentLoaded', function() {
