@@ -420,19 +420,25 @@ export default function TeacherSessionsDashboard() {
                     }`}
                   >
                     <div className="flex items-start justify-between gap-2 mb-1.5">
-                      <div className="flex items-center gap-2">
-                        <span
-                          className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-black shrink-0 ${
+                      <div className="flex items-start gap-2.5">
+                        <div
+                          className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs shrink-0 mt-0.5 ${
                             isSelected
                               ? 'bg-primary text-white'
-                              : 'bg-surface-container dark:bg-gray-800 text-on-surface-variant dark:text-gray-300'
+                              : 'bg-surface-container dark:bg-gray-800 text-primary dark:text-primary-light'
                           }`}
                         >
-                          #{index + 1}
-                        </span>
-                        <h3 className="font-bold text-sm text-on-surface dark:text-gray-100 line-clamp-1">
-                          {meeting.title}
-                        </h3>
+                          <BookOpen className="w-3.5 h-3.5" />
+                        </div>
+                        <div>
+                          <h3 className="font-bold text-sm text-on-surface dark:text-gray-100 line-clamp-1">
+                            {meeting.title}
+                          </h3>
+                          <span className="text-[10px] text-on-surface-variant/70 dark:text-gray-400 flex items-center gap-1 font-medium mt-0.5">
+                            <Calendar className="w-3 h-3 text-slate-400" />
+                            Dibuat: {new Date(meeting.created_at || meeting.meeting_date || Date.now()).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
+                          </span>
+                        </div>
                       </div>
 
                       {meeting.is_active ? (
@@ -537,8 +543,9 @@ export default function TeacherSessionsDashboard() {
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-surface-container dark:border-gray-800">
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
-                      <span className="text-xs font-extrabold uppercase px-2 py-0.5 rounded-md bg-primary text-white">
-                        Session #{selectedMeetingIndex >= 0 ? selectedMeetingIndex + 1 : (selectedMeeting.session_number || 1)}
+                      <span className="text-xs font-bold px-2.5 py-0.5 rounded-md bg-primary/15 text-primary dark:text-primary-light border border-primary/25 flex items-center gap-1">
+                        <Calendar className="w-3 h-3" />
+                        Dibuat: {new Date(selectedMeeting.created_at || selectedMeeting.meeting_date || Date.now()).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
                       </span>
                       {selectedMeeting.is_active ? (
                         <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20">
@@ -978,8 +985,8 @@ export default function TeacherSessionsDashboard() {
             <div className="flex items-center justify-between border-b border-surface-container dark:border-gray-800 pb-3">
               <div className="flex items-center gap-2">
                 <FolderPlus className="w-5 h-5 text-emerald-600" />
-                <h3 className="text-base font-bold text-on-surface dark:text-gray-100">
-                  Create Folder in Session #{selectedMeetingIndex >= 0 ? selectedMeetingIndex + 1 : (selectedMeeting?.session_number || 1)}
+                <h3 className="text-base font-bold text-on-surface dark:text-gray-100 truncate max-w-xs">
+                  Create Folder in: {selectedMeeting?.title || 'Session'}
                 </h3>
               </div>
               <button

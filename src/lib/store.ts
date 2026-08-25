@@ -147,11 +147,16 @@ export const store = {
     return newClass;
   },
 
-  // Meetings / Class Sessions
+  // Meetings / Class Sessions (Sorted newest first)
   getMeetings(classId?: string): Meeting[] {
     const meetings = getStored<Meeting[]>('meetings', INITIAL_MEETINGS);
-    if (!classId) return meetings;
-    return meetings.filter(m => m.class_id === classId);
+    const sorted = [...meetings].sort((a, b) => {
+      const timeA = new Date(a.created_at || a.meeting_date || 0).getTime();
+      const timeB = new Date(b.created_at || b.meeting_date || 0).getTime();
+      return timeB - timeA;
+    });
+    if (!classId) return sorted;
+    return sorted.filter(m => m.class_id === classId);
   },
 
   getMeeting(meetingId: string): Meeting | undefined {
@@ -534,8 +539,8 @@ export const store = {
       // 1. Sync profiles
       await this.forceSyncProfiles();
 
-      // 2. Sync meetings (Supabase is Single Source of Truth)
-      const { data: dbMeetings, error: mErr } = await supabase.from('meetings').select('*').order('session_number', { ascending: true });
+      // 2. Sync meetings (Supabase is Single Source of Truth, newest first)
+      const { data: dbMeetings, error: mErr } = await supabase.from('meetings').select('*').order('created_at', { ascending: false });
       if (!mErr && dbMeetings) {
         setStored('meetings', dbMeetings);
       }
