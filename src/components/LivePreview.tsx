@@ -19,6 +19,52 @@ function escapeRegExp(string: string) {
   return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+function transformHtmlLinks(rawHtml: string): string {
+  if (!rawHtml) return '';
+
+  return rawHtml.replace(/<a\b([^>]*)>/gi, (match, attrs) => {
+    const hrefMatch = attrs.match(/href=(?:"([^"]*)"|'([^']*)'|([^>\s]+))/i);
+    if (!hrefMatch) return match;
+
+    const rawHref = (hrefMatch[1] || hrefMatch[2] || hrefMatch[3] || '').trim();
+    if (!rawHref || rawHref === '#' || rawHref.startsWith('javascript:')) {
+      return match;
+    }
+
+    if (rawHref.startsWith('#')) {
+      return match;
+    }
+
+    const isExternal = rawHref.startsWith('http://') || 
+                       rawHref.startsWith('https://') || 
+                       rawHref.startsWith('//') || 
+                       rawHref.startsWith('mailto:') || 
+                       rawHref.startsWith('tel:') || 
+                       rawHref.startsWith('www.') || 
+                       /^[a-zA-Z0-9-]+\.(com|org|net|id|io|edu|gov|co|app|dev)(\/|$|\?)/i.test(rawHref);
+
+    if (isExternal) {
+      let finalUrl = rawHref;
+      if (!rawHref.startsWith('http://') && !rawHref.startsWith('https://') && !rawHref.startsWith('//') && !rawHref.startsWith('mailto:') && !rawHref.startsWith('tel:')) {
+        finalUrl = 'https://' + rawHref;
+      }
+      const cleanedAttrs = attrs
+        .replace(/href=(?:"[^"]*"|'[^']*'|[^>\s]+)/i, '')
+        .replace(/target=(?:"[^"]*"|'[^']*'|[^>\s]+)/i, '')
+        .trim();
+      return `<a href="${finalUrl}" target="_blank" rel="noopener noreferrer" ${cleanedAttrs}>`;
+    }
+
+    const cleanFileName = rawHref.replace(/^(\.\/|\/)/, '');
+    const cleanedAttrs = attrs
+      .replace(/href=(?:"[^"]*"|'[^']*'|[^>\s]+)/i, '')
+      .replace(/target=(?:"[^"]*"|'[^']*'|[^>\s]+)/i, '')
+      .trim();
+
+    return `<a href="javascript:void(0)" data-kodelab-file="${cleanFileName}" onclick="try{window.parent.postMessage({type:'NAVIGATE_LOCAL_FILE',fileName:'${cleanFileName}'},'*');}catch(e){}return false;" ${cleanedAttrs}>`;
+  });
+}
+
 export default function LivePreview({
   htmlCode,
   cssCode,
@@ -47,7 +93,7 @@ export default function LivePreview({
         }
       } else if (event.data.type === 'OPEN_EXTERNAL_URL' && event.data.url) {
         let url = event.data.url.trim();
-        if (!url.startsWith('http://') && !url.startsWith('https://') && !url.startsWith('//') && !url.startsWith('mailto:') && !url.startsWith('tel:')) {
+        if (!url.startsWith('http://') && !url.startsWith('https://') && !url.startsWith('//')) {
           url = 'https://' + url;
         }
         window.open(url, '_blank', 'noopener,noreferrer');
@@ -88,6 +134,9 @@ export default function LivePreview({
         content = content.replace(regexUrl, `url('${dataUrl}')`);
       });
     }
+
+    // Transform all anchor tags: local links use postMessage, external links use target="_blank"
+    content = transformHtmlLinks(content);
 
     // Default pleasant background and fallback if completely empty
     if (!content.trim() && !styleContent.trim() && !debouncedJs.trim()) {
