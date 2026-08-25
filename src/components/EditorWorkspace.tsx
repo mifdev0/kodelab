@@ -66,8 +66,8 @@ export default function EditorWorkspace({ initialMeetingId }: EditorWorkspacePro
   const [isExplorerOpen, setIsExplorerOpen] = useState(true);
   const [isFolderTreeOpen, setIsFolderTreeOpen] = useState(true);
 
-  // Side Preview Visibility & Resizable Split Ratio
-  const [showSidePreview, setShowSidePreview] = useState(true);
+  // Side Preview Visibility (Closed by default per user request) & Resizable Split Ratio
+  const [showSidePreview, setShowSidePreview] = useState(false);
   const [splitRatio, setSplitRatio] = useState<number>(55);
   const [isDraggingSplit, setIsDraggingSplit] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -920,11 +920,11 @@ export default function EditorWorkspace({ initialMeetingId }: EditorWorkspacePro
                   {!showSidePreview && (
                     <button
                       onClick={() => setShowSidePreview(true)}
-                      className="hidden lg:flex items-center gap-1.5 px-3 h-8 bg-primary/10 hover:bg-primary/20 text-primary rounded-lg text-xs font-bold transition-colors"
-                      title="Show Split Side Preview"
+                      className="hidden lg:flex items-center gap-1.5 px-3 h-8 bg-primary/10 hover:bg-primary/20 text-primary dark:text-primary-light rounded-lg text-xs font-bold transition-colors border border-primary/20"
+                      title="Tampilkan Preview (Split Screen)"
                     >
                       <Columns className="w-3.5 h-3.5" />
-                      <span className="hidden sm:inline">Show Preview</span>
+                      <span>Tampilkan Preview</span>
                     </button>
                   )}
                 </div>
