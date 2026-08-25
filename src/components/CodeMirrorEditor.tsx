@@ -19,11 +19,12 @@ import { html } from '@codemirror/lang-html';
 import { css } from '@codemirror/lang-css';
 import { javascript } from '@codemirror/lang-javascript';
 import { autocompletion, closeBrackets, closeBracketsKeymap, completionKeymap } from '@codemirror/autocomplete';
-import { HighlightStyle, syntaxHighlighting } from '@codemirror/language';
+import { HighlightStyle, syntaxHighlighting, syntaxTree } from '@codemirror/language';
 import { tags as t } from '@lezer/highlight';
 import { linter, lintGutter, Diagnostic } from '@codemirror/lint';
 import { EditorTab } from '@/types';
 import { useTheme } from '@/lib/theme-context';
+import { formatCode } from '@/lib/formatter';
 
 // VS Code & Kinetic Light Syntax Highlighting
 export const kineticLightHighlight = HighlightStyle.define([
@@ -109,6 +110,19 @@ const lightEditorTheme = EditorView.theme({
     backgroundColor: '#e2e8f0',
     outline: '1px solid #00685f',
   },
+  '.cm-matchingTag': {
+    backgroundColor: 'rgba(2, 132, 199, 0.14) !important',
+    outline: '1px solid #0284c7',
+    borderRadius: '3px',
+  },
+  '.cm-matchingTagName': {
+    backgroundColor: 'rgba(2, 132, 199, 0.22) !important',
+    color: '#0284c7 !important',
+    fontWeight: '800 !important',
+    textDecoration: 'underline !important',
+    textDecorationColor: '#0284c7 !important',
+    textUnderlineOffset: '3px !important',
+  },
   // VS Code Indentation Guide Lines
   '.cm-indent-guide': {
     display: 'inline-block',
@@ -180,6 +194,19 @@ const darkEditorTheme = EditorView.theme({
   '.cm-matchingBracket, .cm-nonmatchingBracket': {
     backgroundColor: '#3e4451',
     outline: '1px solid #62fae3',
+  },
+  '.cm-matchingTag': {
+    backgroundColor: 'rgba(98, 250, 227, 0.16) !important',
+    outline: '1px solid #62fae3',
+    borderRadius: '3px',
+  },
+  '.cm-matchingTagName': {
+    backgroundColor: 'rgba(98, 250, 227, 0.28) !important',
+    color: '#62fae3 !important',
+    fontWeight: '800 !important',
+    textDecoration: 'underline !important',
+    textDecorationColor: '#62fae3 !important',
+    textUnderlineOffset: '3px !important',
   },
   // VS Code Indentation Guide Lines
   '.cm-indent-guide': {
@@ -569,6 +596,94 @@ const createDiagnosticLinter = (lang: EditorTab) => linter((view) => {
   return [];
 }, { delay: 300 });
 
+// Matching HTML Tag Highlighter Plugin (Highlights opening & closing paired tags)
+const matchingTagPlugin = ViewPlugin.fromClass(class {
+  decorations: DecorationSet;
+
+  constructor(view: EditorView) {
+    this.decorations = this.getMatchingTags(view);
+  }
+
+  update(update: ViewUpdate) {
+    if (update.docChanged || update.selectionSet || update.viewportChanged) {
+      this.decorations = this.getMatchingTags(update.view);
+    }
+  }
+
+  getMatchingTags(view: EditorView): DecorationSet {
+    const { state } = view;
+    const selection = state.selection.main;
+    const pos = selection.head;
+    const tree = syntaxTree(state);
+
+    if (!tree) return Decoration.none;
+
+    let node = tree.resolveInner(pos, 1);
+    let tagNode: any = node;
+
+    // Walk up to find OpenTag, CloseTag, or SelfClosingTag
+    while (tagNode && !['OpenTag', 'CloseTag', 'SelfClosingTag'].includes(tagNode.name) && tagNode.parent) {
+      if (tagNode.name === 'Element') break;
+      tagNode = tagNode.parent;
+    }
+
+    if (!tagNode) return Decoration.none;
+
+    const decorations: any[] = [];
+
+    if (tagNode.name === 'SelfClosingTag') {
+      const tagName = tagNode.getChild('TagName');
+      if (tagName) {
+        decorations.push(
+          Decoration.mark({ class: 'cm-matchingTag cm-matchingTagName' }).range(tagName.from, tagName.to)
+        );
+      } else {
+        decorations.push(
+          Decoration.mark({ class: 'cm-matchingTag' }).range(tagNode.from, tagNode.to)
+        );
+      }
+      return Decoration.set(decorations, true);
+    }
+
+    const elementNode = tagNode.name === 'Element' ? tagNode : tagNode.parent;
+    if (!elementNode || elementNode.name !== 'Element') return Decoration.none;
+
+    const openTag = elementNode.getChild('OpenTag');
+    const closeTag = elementNode.getChild('CloseTag');
+
+    if (openTag) {
+      const openTagName = openTag.getChild('TagName');
+      if (openTagName) {
+        decorations.push(
+          Decoration.mark({ class: 'cm-matchingTag cm-matchingTagName' }).range(openTagName.from, openTagName.to)
+        );
+      } else {
+        decorations.push(
+          Decoration.mark({ class: 'cm-matchingTag' }).range(openTag.from, openTag.to)
+        );
+      }
+    }
+
+    if (closeTag) {
+      const closeTagName = closeTag.getChild('TagName');
+      if (closeTagName) {
+        decorations.push(
+          Decoration.mark({ class: 'cm-matchingTag cm-matchingTagName' }).range(closeTagName.from, closeTagName.to)
+        );
+      } else {
+        decorations.push(
+          Decoration.mark({ class: 'cm-matchingTag' }).range(closeTag.from, closeTag.to)
+        );
+      }
+    }
+
+    decorations.sort((a, b) => a.from - b.from);
+    return Decoration.set(decorations, true);
+  }
+}, {
+  decorations: v => v.decorations
+});
+
 interface CodeMirrorEditorProps {
   value: string;
   language: EditorTab;
@@ -576,6 +691,7 @@ interface CodeMirrorEditorProps {
   readOnly?: boolean;
   onUndoRef?: React.MutableRefObject<(() => void) | null>;
   onRedoRef?: React.MutableRefObject<(() => void) | null>;
+  onFormatRef?: React.MutableRefObject<(() => void) | null>;
 }
 
 export default function CodeMirrorEditor({
@@ -585,13 +701,30 @@ export default function CodeMirrorEditor({
   readOnly = false,
   onUndoRef,
   onRedoRef,
+  onFormatRef,
 }: CodeMirrorEditorProps) {
   const editorRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const updatingFromProps = useRef(false);
   const { theme } = useTheme();
 
-  // Expose undo/redo functions via refs
+  // Expose undo, redo, and format functions via refs
+  const formatDocument = () => {
+    if (!viewRef.current || readOnly) return;
+    const view = viewRef.current;
+    const currentCode = view.state.doc.toString();
+    const formatted = formatCode(currentCode, language);
+    if (formatted && formatted !== currentCode) {
+      view.dispatch({
+        changes: { from: 0, to: currentCode.length, insert: formatted },
+        userEvent: 'format',
+      });
+      if (onChange) {
+        onChange(formatted);
+      }
+    }
+  };
+
   useEffect(() => {
     if (onUndoRef) {
       onUndoRef.current = () => {
@@ -603,7 +736,12 @@ export default function CodeMirrorEditor({
         if (viewRef.current) redo(viewRef.current);
       };
     }
-  }, [onUndoRef, onRedoRef]);
+    if (onFormatRef) {
+      onFormatRef.current = () => {
+        formatDocument();
+      };
+    }
+  }, [onUndoRef, onRedoRef, onFormatRef, language, readOnly]);
 
   useEffect(() => {
     if (!editorRef.current) return;
@@ -634,6 +772,20 @@ export default function CodeMirrorEditor({
       lintGutter(),
       createDiagnosticLinter(language),
       keymap.of([
+        {
+          key: 'Shift-Alt-f',
+          run: () => {
+            formatDocument();
+            return true;
+          },
+        },
+        {
+          key: 'Mod-Alt-f',
+          run: () => {
+            formatDocument();
+            return true;
+          },
+        },
         indentWithTab,
         ...closeBracketsKeymap,
         ...defaultKeymap,
@@ -645,6 +797,7 @@ export default function CodeMirrorEditor({
 
     if (language === 'html') {
       extensions.push(emmetHtmlKeymap);
+      extensions.push(matchingTagPlugin);
     }
 
     if (readOnly) {

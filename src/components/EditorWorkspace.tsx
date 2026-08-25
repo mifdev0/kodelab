@@ -110,9 +110,11 @@ export default function EditorWorkspace({ initialMeetingId }: EditorWorkspacePro
   // Fullscreen Preview
   const [isFullscreenPreview, setIsFullscreenPreview] = useState(false);
 
-  // Undo / Redo refs
+  // Undo / Redo / Format refs
   const undoRef = useRef<(() => void) | null>(null);
   const redoRef = useRef<(() => void) | null>(null);
+  const formatRef = useRef<(() => void) | null>(null);
+  const [showFormatToast, setShowFormatToast] = useState(false);
   const autosaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const isTeacher = user?.role === 'teacher';
@@ -505,6 +507,15 @@ export default function EditorWorkspace({ initialMeetingId }: EditorWorkspacePro
     } catch (e) {}
   }, [previewHtml, previewCss, previewJs, assetsMap]);
 
+  const handleFormatCode = () => {
+    if (isReadOnly || !activeFile || activeFile.language === 'image') return;
+    if (formatRef.current) {
+      formatRef.current();
+      setShowFormatToast(true);
+      setTimeout(() => setShowFormatToast(false), 2000);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background dark:bg-[#121418] text-on-surface dark:text-gray-100 select-none transition-colors">
       {/* Hidden File Upload Input */}
@@ -820,6 +831,17 @@ export default function EditorWorkspace({ initialMeetingId }: EditorWorkspacePro
                   >
                     <RotateCw className="w-4 h-4 md:w-5 md:h-5" />
                   </button>
+
+                  {/* Format / Beautify Code Button */}
+                  <button
+                    onClick={handleFormatCode}
+                    disabled={isReadOnly || !activeFile || activeFile.language === 'image'}
+                    className="h-9 md:h-11 px-2.5 md:px-3 flex items-center gap-1.5 text-xs font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 disabled:opacity-40 disabled:pointer-events-none rounded-lg transition-colors shadow-2xs ml-1 min-h-[44px]"
+                    title="Format Code / Rapikan (Shift + Alt + F)"
+                  >
+                    <Sparkles className="w-3.5 h-3.5 md:w-4 md:h-4 text-amber-500" />
+                    <span className="hidden sm:inline font-sans">Rapikan Code</span>
+                  </button>
                 </div>
 
                 {/* Mobile View Switcher: Code vs Preview */}
@@ -903,6 +925,14 @@ export default function EditorWorkspace({ initialMeetingId }: EditorWorkspacePro
 
               {/* CodeMirror Editor or Image Viewer */}
               <div className="flex-1 overflow-hidden relative">
+                {/* Floating Format Success Toast */}
+                {showFormatToast && (
+                  <div className="absolute top-4 right-4 z-50 px-3.5 py-2 rounded-xl bg-slate-900/90 text-white dark:bg-white/90 dark:text-slate-900 backdrop-blur-md shadow-lg flex items-center gap-2 text-xs font-bold animate-in fade-in slide-in-from-top-2 duration-200 pointer-events-none">
+                    <Sparkles className="w-4 h-4 text-amber-400 dark:text-amber-500 animate-spin" />
+                    <span>Code Formatted & Indented! ✨</span>
+                  </div>
+                )}
+
                 {activeFile?.language === 'image' ? (
                   /* Clean Image Viewer */
                   <div className="flex flex-col items-center justify-center h-full p-6 bg-surface-container-low dark:bg-[#14161a] overflow-auto space-y-3">
@@ -926,6 +956,7 @@ export default function EditorWorkspace({ initialMeetingId }: EditorWorkspacePro
                     onChange={handleCodeChange}
                     onUndoRef={undoRef}
                     onRedoRef={redoRef}
+                    onFormatRef={formatRef}
                   />
                 ) : !activeFolderId ? (
                   /* No Folder Opened State */
