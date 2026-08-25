@@ -1311,9 +1311,9 @@ export default function EditorWorkspace({ initialMeetingId }: EditorWorkspacePro
                   className="w-full px-3.5 py-2.5 bg-surface-container dark:bg-gray-900 rounded-xl border border-outline-variant/40 dark:border-gray-700 text-sm focus:outline-none focus:border-primary text-on-surface dark:text-gray-100 font-medium"
                 >
                   <option value="">-- Personal / Standalone Folder --</option>
-                  {meetings.map((m) => (
+                  {meetings.map((m, idx) => (
                     <option key={m.id} value={m.id}>
-                      Session #{m.session_number || 1}: {m.title}
+                      Session #{idx + 1}: {m.title}
                     </option>
                   ))}
                 </select>

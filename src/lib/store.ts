@@ -166,9 +166,7 @@ export const store = {
     banner_url?: string
   ): Promise<Meeting> {
     const meetings = this.getMeetings();
-    const nextSessionNum = meetings.length > 0
-      ? Math.max(...meetings.map(m => m.session_number || 0)) + 1
-      : 1;
+    const nextSessionNum = meetings.length + 1;
 
     const defaultBanner = banner_url || 'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?q=80&w=800&auto=format&fit=crop';
 
@@ -235,17 +233,26 @@ export const store = {
   async deleteMeeting(meetingId: string): Promise<void> {
     const meetings = this.getMeetings();
     const filtered = meetings.filter(m => m.id !== meetingId);
-    setStored('meetings', filtered);
+    
+    // Automatically re-sequence remaining meetings so numbers are always 1, 2, 3...
+    const reindexed = filtered.map((m, idx) => ({
+      ...m,
+      session_number: idx + 1,
+    }));
+    setStored('meetings', reindexed);
 
     // Also remove projects associated with this meeting
     const projects = getStored<UserProject[]>('user_projects', INITIAL_PROJECTS);
     const filteredProjects = projects.filter(p => p.meeting_id !== meetingId);
     setStored('user_projects', filteredProjects);
 
-    // Sync deletion to Supabase
+    // Sync deletion & updated session numbers to Supabase
     if (supabase) {
       try {
         await supabase.from('meetings').delete().eq('id', meetingId);
+        for (const m of reindexed) {
+          await supabase.from('meetings').update({ session_number: m.session_number }).eq('id', m.id);
+        }
       } catch (e) {
         console.warn('Supabase meeting delete error:', e);
       }

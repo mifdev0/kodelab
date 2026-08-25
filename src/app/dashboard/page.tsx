@@ -260,6 +260,11 @@ export default function TeacherSessionsDashboard() {
     return meetings.find(m => m.id === selectedMeetingId);
   }, [meetings, selectedMeetingId]);
 
+  const selectedMeetingIndex = useMemo(() => {
+    if (!selectedMeetingId) return -1;
+    return meetings.findIndex(m => m.id === selectedMeetingId);
+  }, [meetings, selectedMeetingId]);
+
   const filteredProjects = useMemo(() => {
     if (!searchQuery.trim()) return sessionProjects;
     const q = searchQuery.toLowerCase();
@@ -399,7 +404,7 @@ export default function TeacherSessionsDashboard() {
             </div>
 
             <div className="space-y-2.5 h-[calc(100vh-200px)] overflow-y-auto pr-1 pb-4">
-              {meetings.map((meeting) => {
+              {meetings.map((meeting, index) => {
                 const isSelected = meeting.id === selectedMeetingId;
                 const projs = store.getProjectsByMeeting(meeting.id);
                 const studentsJoined = new Set(projs.filter(p => p.student?.role === 'student').map(p => p.student_id)).size;
@@ -423,7 +428,7 @@ export default function TeacherSessionsDashboard() {
                               : 'bg-surface-container dark:bg-gray-800 text-on-surface-variant dark:text-gray-300'
                           }`}
                         >
-                          #{meeting.session_number || 1}
+                          #{index + 1}
                         </span>
                         <h3 className="font-bold text-sm text-on-surface dark:text-gray-100 line-clamp-1">
                           {meeting.title}
@@ -533,7 +538,7 @@ export default function TeacherSessionsDashboard() {
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
                       <span className="text-xs font-extrabold uppercase px-2 py-0.5 rounded-md bg-primary text-white">
-                        Session #{selectedMeeting.session_number || 1}
+                        Session #{selectedMeetingIndex >= 0 ? selectedMeetingIndex + 1 : (selectedMeeting.session_number || 1)}
                       </span>
                       {selectedMeeting.is_active ? (
                         <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20">
@@ -955,7 +960,7 @@ export default function TeacherSessionsDashboard() {
               <div className="flex items-center gap-2">
                 <FolderPlus className="w-5 h-5 text-emerald-600" />
                 <h3 className="text-base font-bold text-on-surface dark:text-gray-100">
-                  Create Folder in Session #{selectedMeeting?.session_number || 1}
+                  Create Folder in Session #{selectedMeetingIndex >= 0 ? selectedMeetingIndex + 1 : (selectedMeeting?.session_number || 1)}
                 </h3>
               </div>
               <button
