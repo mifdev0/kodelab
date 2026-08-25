@@ -389,16 +389,16 @@ export default function TeacherSessionsDashboard() {
         </section>
 
         {/* 2-Column Master Detail: Sessions List (Left) & Student Folders Grid (Right) */}
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-4 lg:gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-4 lg:gap-6 min-w-0">
           
           {/* Left Column: Session Meetings List */}
-          <aside className="md:col-span-5 lg:col-span-4 space-y-3">
+          <aside className="md:col-span-5 lg:col-span-4 min-w-0 space-y-3">
             <div className="flex items-center justify-between px-1">
               <span className="text-xs font-bold uppercase tracking-wider text-on-surface-variant dark:text-gray-400 flex items-center gap-1.5">
-                <BookOpen className="w-3.5 h-3.5 text-primary" />
-                Session Timeline
+                <BookOpen className="w-3.5 h-3.5 text-primary shrink-0" />
+                <span>Session Timeline</span>
               </span>
-              <span className="text-xs font-semibold text-primary">
+              <span className="text-xs font-semibold text-primary shrink-0">
                 {meetings.length} Sessions
               </span>
             </div>
@@ -413,14 +413,14 @@ export default function TeacherSessionsDashboard() {
                   <div
                     key={meeting.id}
                     onClick={() => handleSelectMeeting(meeting.id)}
-                    className={`p-4 rounded-2xl border transition-all cursor-pointer select-none relative group min-h-[44px] ${
+                    className={`p-3.5 sm:p-4 rounded-2xl border transition-all cursor-pointer select-none relative group min-h-[44px] min-w-0 overflow-hidden ${
                       isSelected
                         ? 'bg-primary-container/20 dark:bg-primary/10 border-primary shadow-xs ring-1 ring-primary'
                         : 'bg-surface-container-lowest dark:bg-[#181a1f] border-surface-container dark:border-gray-800 hover:border-primary/50'
                     }`}
                   >
-                    <div className="flex items-start justify-between gap-2 mb-1.5">
-                      <div className="flex items-start gap-2.5">
+                    <div className="flex items-start justify-between gap-2 mb-1.5 min-w-0">
+                      <div className="flex items-start gap-2.5 min-w-0 flex-1">
                         <div
                           className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs shrink-0 mt-0.5 ${
                             isSelected
@@ -430,13 +430,13 @@ export default function TeacherSessionsDashboard() {
                         >
                           <BookOpen className="w-3.5 h-3.5" />
                         </div>
-                        <div>
-                          <h3 className="font-bold text-sm text-on-surface dark:text-gray-100 line-clamp-1">
+                        <div className="min-w-0 flex-1">
+                          <h3 className="font-bold text-sm text-on-surface dark:text-gray-100 truncate">
                             {meeting.title}
                           </h3>
-                          <span className="text-[10px] text-on-surface-variant/70 dark:text-gray-400 flex items-center gap-1 font-medium mt-0.5">
-                            <Calendar className="w-3 h-3 text-slate-400" />
-                            Dibuat: {new Date(meeting.created_at || meeting.meeting_date || Date.now()).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
+                          <span className="text-[10px] text-on-surface-variant/70 dark:text-gray-400 flex items-center gap-1 font-medium mt-0.5 truncate">
+                            <Calendar className="w-3 h-3 text-slate-400 shrink-0" />
+                            <span>Dibuat: {new Date(meeting.created_at || meeting.meeting_date || Date.now()).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
                           </span>
                         </div>
                       </div>
@@ -453,29 +453,29 @@ export default function TeacherSessionsDashboard() {
                     </div>
 
                     {meeting.description && (
-                      <p className="text-xs text-on-surface-variant dark:text-gray-400 line-clamp-2 mb-3">
+                      <p className="text-xs text-on-surface-variant dark:text-gray-400 line-clamp-2 mb-3 break-words">
                         {meeting.description}
                       </p>
                     )}
 
                     {/* Stats & Session Footer */}
-                    <div className="flex items-center justify-between pt-2 border-t border-surface-container/60 dark:border-gray-800/80 text-[11px] text-on-surface-variant/80 dark:text-gray-400">
-                      <div className="flex items-center gap-3">
-                        <span className="flex items-center gap-1 font-semibold">
-                          <Users className="w-3.5 h-3.5 text-primary" />
-                          {studentsJoined} {studentsJoined === 1 ? 'student' : 'students'}
+                    <div className="flex items-center justify-between pt-2 border-t border-surface-container/60 dark:border-gray-800/80 text-[11px] text-on-surface-variant/80 dark:text-gray-400 gap-1">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <span className="flex items-center gap-1 font-semibold truncate">
+                          <Users className="w-3.5 h-3.5 text-primary shrink-0" />
+                          <span>{studentsJoined} {studentsJoined === 1 ? 'student' : 'students'}</span>
                         </span>
-                        <span className="flex items-center gap-1 font-semibold">
-                          <Folder className="w-3.5 h-3.5 text-amber-500" />
-                          {projs.length} {projs.length === 1 ? 'folder' : 'folders'}
+                        <span className="flex items-center gap-1 font-semibold truncate">
+                          <Folder className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                          <span>{projs.length} {projs.length === 1 ? 'folder' : 'folders'}</span>
                         </span>
                       </div>
 
-                      <div className="flex items-center gap-1 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                      <div className="flex items-center gap-1 shrink-0">
                         {isTeacher && (
                           <button
                             onClick={(e) => handleToggleSessionStatus(meeting.id, e)}
-                            className={`p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-xs hover:underline font-bold ${
+                            className={`p-1.5 min-h-[36px] min-w-[36px] flex items-center justify-center text-xs hover:underline font-bold rounded-lg ${
                               meeting.is_active
                                 ? 'text-amber-600 dark:text-amber-400'
                                 : 'text-emerald-600 dark:text-emerald-400'
@@ -488,7 +488,7 @@ export default function TeacherSessionsDashboard() {
                         {isTeacher && (
                           <button
                             onClick={(e) => handleDeleteSession(meeting.id, e)}
-                            className="p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-on-surface-variant hover:text-error dark:hover:text-red-400 transition-colors"
+                            className="p-1.5 min-h-[36px] min-w-[36px] flex items-center justify-center text-on-surface-variant hover:text-error dark:hover:text-red-400 transition-colors rounded-lg"
                             title="Delete Session"
                           >
                             <Trash2 className="w-4 h-4" />
@@ -503,25 +503,25 @@ export default function TeacherSessionsDashboard() {
           </aside>
 
           {/* Right Column: Session Folder Inspector & Student Grid */}
-          <main className="md:col-span-7 lg:col-span-8 space-y-4 h-[calc(100vh-200px)] overflow-y-auto pb-4 pr-1">
+          <main className="md:col-span-7 lg:col-span-8 min-w-0 space-y-4 h-[calc(100vh-200px)] overflow-y-auto pb-4 pr-1">
             
             {/* Active Session Detail Card */}
             {selectedMeeting ? (
-              <div className="bg-surface-container-lowest dark:bg-[#181a1f] p-5 rounded-2xl border border-surface-container dark:border-gray-800 shadow-xs space-y-4">
+              <div className="bg-surface-container-lowest dark:bg-[#181a1f] p-4 sm:p-5 rounded-2xl border border-surface-container dark:border-gray-800 shadow-xs space-y-4 min-w-0">
                 
                 {/* Classroom Documentation Banner Photo */}
-                <div className="relative h-44 md:h-52 w-full rounded-2xl overflow-hidden bg-slate-900 shadow-xs border border-surface-container dark:border-gray-800 group">
+                <div className="relative h-40 sm:h-48 md:h-52 w-full rounded-2xl overflow-hidden bg-slate-900 shadow-xs border border-surface-container dark:border-gray-800 group">
                   <img
                     src={selectedMeeting.banner_url || 'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?q=80&w=800&auto=format&fit=crop'}
                     alt={selectedMeeting.title}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                   />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent flex items-end justify-between p-4 md:p-6">
-                    <div className="text-white space-y-1">
-                      <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-white/20 backdrop-blur-md">
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent flex items-end justify-between p-3.5 sm:p-5 md:p-6 gap-2">
+                    <div className="text-white space-y-1 min-w-0 flex-1">
+                      <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-white/20 backdrop-blur-md inline-block">
                         Class Documentation
                       </span>
-                      <h2 className="text-lg md:text-2xl font-black truncate max-w-xl">
+                      <h2 className="text-base sm:text-lg md:text-2xl font-black truncate">
                         {selectedMeeting.title}
                       </h2>
                     </div>
@@ -529,47 +529,47 @@ export default function TeacherSessionsDashboard() {
                     {isTeacher && (
                       <button
                         onClick={() => handleOpenBannerModal(selectedMeeting)}
-                        className="px-3.5 py-1.5 bg-white/90 hover:bg-white text-slate-900 text-xs font-bold rounded-xl shadow-lg flex items-center gap-1.5 transition-all backdrop-blur-xs shrink-0"
+                        className="px-3 py-1.5 sm:px-3.5 sm:py-1.5 bg-white/90 hover:bg-white text-slate-900 text-xs font-bold rounded-xl shadow-lg flex items-center gap-1.5 transition-all backdrop-blur-xs shrink-0 min-h-[40px]"
                         title="Update Class Documentation / Banner"
                       >
-                        <Camera className="w-3.5 h-3.5 text-primary" />
-                        <span>Update Banner</span>
+                        <Camera className="w-3.5 h-3.5 text-primary shrink-0" />
+                        <span className="hidden sm:inline">Update Banner</span>
                       </button>
                     )}
                   </div>
                 </div>
 
                 {/* Session Header Controls */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-surface-container dark:border-gray-800">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold px-2.5 py-0.5 rounded-md bg-primary/15 text-primary dark:text-primary-light border border-primary/25 flex items-center gap-1">
-                        <Calendar className="w-3 h-3" />
-                        Dibuat: {new Date(selectedMeeting.created_at || selectedMeeting.meeting_date || Date.now()).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-surface-container dark:border-gray-800 min-w-0">
+                  <div className="space-y-1 min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-xs font-bold px-2.5 py-0.5 rounded-md bg-primary/15 text-primary dark:text-primary-light border border-primary/25 flex items-center gap-1 shrink-0">
+                        <Calendar className="w-3 h-3 shrink-0" />
+                        <span>Dibuat: {new Date(selectedMeeting.created_at || selectedMeeting.meeting_date || Date.now()).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
                       </span>
                       {selectedMeeting.is_active ? (
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20">
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20 shrink-0">
                           🟢 Active / Open
                         </span>
                       ) : (
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20">
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20 shrink-0">
                           🔒 Closed (Read-Only)
                         </span>
                       )}
                     </div>
                     {selectedMeeting.description && (
-                      <p className="text-xs text-on-surface-variant dark:text-gray-400">
+                      <p className="text-xs text-on-surface-variant dark:text-gray-400 break-words">
                         {selectedMeeting.description}
                       </p>
                     )}
                   </div>
 
                   {/* Header Actions */}
-                  <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex flex-wrap items-center gap-2 shrink-0">
                     {isTeacher && (
                       <button
                         onClick={(e) => handleToggleSessionStatus(selectedMeeting.id, e)}
-                        className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-colors border ${
+                        className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-colors border min-h-[44px] ${
                           selectedMeeting.is_active
                             ? 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/20 hover:bg-amber-500/20'
                             : 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/20 hover:bg-emerald-500/20'
@@ -583,7 +583,7 @@ export default function TeacherSessionsDashboard() {
                     {!selectedMeeting.is_active && !isTeacher ? (
                       <button
                         disabled
-                        className="flex items-center gap-1.5 px-4 py-2 bg-surface-container dark:bg-gray-800 text-on-surface-variant/50 dark:text-gray-500 rounded-xl text-xs md:text-sm font-bold cursor-not-allowed"
+                        className="flex items-center gap-1.5 px-3.5 sm:px-4 py-2 bg-surface-container dark:bg-gray-800 text-on-surface-variant/50 dark:text-gray-500 rounded-xl text-xs sm:text-sm font-bold cursor-not-allowed min-h-[44px]"
                         title="This session has been closed by the instructor."
                       >
                         <span>🔒 Session Closed</span>
@@ -591,9 +591,9 @@ export default function TeacherSessionsDashboard() {
                     ) : (
                       <button
                         onClick={() => setIsNewFolderModalOpen(true)}
-                        className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs md:text-sm font-bold shadow-xs transition-colors"
+                        className="flex items-center gap-1.5 px-3.5 sm:px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs sm:text-sm font-bold shadow-xs transition-colors min-h-[44px]"
                       >
-                        <FolderPlus className="w-4 h-4" />
+                        <FolderPlus className="w-4 h-4 shrink-0" />
                         <span>{isTeacher ? '+ New Starter / Folder' : '+ Create My Folder'}</span>
                       </button>
                     )}
@@ -603,41 +603,41 @@ export default function TeacherSessionsDashboard() {
                 {/* Read-Only Notice Banner if Session is Closed */}
                 {!selectedMeeting.is_active && (
                   <div className="bg-amber-500/10 border border-amber-500/25 text-amber-900 dark:text-amber-200 px-4 py-2.5 rounded-xl flex items-center gap-2.5 text-xs font-semibold">
-                    <span className="text-base">🔒</span>
-                    <span>
+                    <span className="text-base shrink-0">🔒</span>
+                    <span className="break-words">
                       <strong>Session is Closed:</strong> This class session has been locked by the instructor. Students can review and preview code in <strong>Read-Only Mode</strong>, but no new changes can be saved.
                     </span>
                   </div>
                 )}
 
                 {/* Search & Participation Bar */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div className="flex items-center gap-3 text-xs font-semibold text-on-surface-variant dark:text-gray-400">
-                    <span className="flex items-center gap-1.5 bg-surface-container-low dark:bg-gray-900 px-3 py-1.5 rounded-lg border border-surface-container dark:border-gray-800">
-                      <Users className="w-3.5 h-3.5 text-primary" />
-                      <strong>{distinctStudentsCount}</strong> Participating Students
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 min-w-0">
+                  <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs font-semibold text-on-surface-variant dark:text-gray-400 min-w-0">
+                    <span className="flex items-center gap-1.5 bg-surface-container-low dark:bg-gray-900 px-3 py-1.5 rounded-lg border border-surface-container dark:border-gray-800 shrink-0">
+                      <Users className="w-3.5 h-3.5 text-primary shrink-0" />
+                      <strong>{distinctStudentsCount}</strong> Students
                     </span>
-                    <span className="flex items-center gap-1.5 bg-surface-container-low dark:bg-gray-900 px-3 py-1.5 rounded-lg border border-surface-container dark:border-gray-800">
-                      <Folder className="w-3.5 h-3.5 text-amber-500" />
-                      <strong>{sessionProjects.length}</strong> Total Folders
+                    <span className="flex items-center gap-1.5 bg-surface-container-low dark:bg-gray-900 px-3 py-1.5 rounded-lg border border-surface-container dark:border-gray-800 shrink-0">
+                      <Folder className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                      <strong>{sessionProjects.length}</strong> Folders
                     </span>
                   </div>
 
                   {/* Search input */}
-                  <div className="relative w-full sm:w-64">
+                  <div className="relative w-full sm:w-60 md:w-52 lg:w-64">
                     <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant/50 dark:text-gray-400" />
                     <input
                       type="text"
                       placeholder="Search student or folder..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      className="w-full pl-9 pr-3.5 py-1.5 bg-surface-container-low dark:bg-gray-900 rounded-xl border border-surface-container dark:border-gray-800 text-xs focus:outline-none focus:border-primary text-on-surface dark:text-gray-100"
+                      className="w-full pl-9 pr-3.5 py-2 bg-surface-container-low dark:bg-gray-900 rounded-xl border border-surface-container dark:border-gray-800 text-xs focus:outline-none focus:border-primary text-on-surface dark:text-gray-100 min-h-[44px]"
                     />
                   </div>
                 </div>
 
-                {/* Student Folders Grid */}
-                <div className="pt-2">
+                {/* Student Folders Grid: 1 column on tablet split-view, 2 columns on extra wide desktop */}
+                <div className="pt-2 min-w-0">
                   {filteredProjects.length === 0 ? (
                     <div className="text-center py-12 px-4 bg-surface-container-low dark:bg-[#14161a] rounded-2xl border border-dashed border-surface-container dark:border-gray-800 space-y-2">
                       <Folder className="w-10 h-10 text-on-surface-variant/40 dark:text-gray-600 mx-auto" />
@@ -653,7 +653,7 @@ export default function TeacherSessionsDashboard() {
                       </div>
                     </div>
                   ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-3.5 min-w-0">
                       {filteredProjects.map((project) => {
                         const isTeacherOwner = project.student_id === 'teacher-1' || project.student?.role === 'teacher';
                         const isMyProject = user?.id === project.student_id;
@@ -674,36 +674,36 @@ export default function TeacherSessionsDashboard() {
                           <div
                             key={project.id}
                             onClick={handleCardClick}
-                            className={`p-4 rounded-2xl border transition-all hover:shadow-md cursor-pointer group flex flex-col justify-between space-y-3 ${
+                            className={`p-4 rounded-2xl border transition-all hover:shadow-md cursor-pointer group flex flex-col justify-between space-y-3 min-w-0 overflow-hidden ${
                               isMyProject
                                 ? 'bg-primary-container/10 dark:bg-primary/5 border-primary/40 dark:border-primary/40 ring-1 ring-primary/20'
                                 : 'bg-surface-container-low dark:bg-[#14161a] border-surface-container dark:border-gray-800 hover:border-primary/60'
                             }`}
                           >
-                            <div className="space-y-2.5">
+                            <div className="space-y-2.5 min-w-0">
                               {/* Student Badge & Author Header */}
-                              <div className="flex items-center justify-between gap-2">
-                                <div className="flex items-center gap-2">
+                              <div className="flex items-center justify-between gap-2 min-w-0">
+                                <div className="flex items-center gap-2 min-w-0 flex-1">
                                   <div className="w-7 h-7 rounded-full bg-primary/10 dark:bg-primary/25 text-primary dark:text-primary-light flex items-center justify-center font-bold text-xs shrink-0 border border-primary/20 shadow-xs">
                                     <span>{studentName.charAt(0).toUpperCase()}</span>
                                   </div>
-                                  <div className="overflow-hidden">
-                                    <div className="flex items-center gap-1.5">
-                                      <span className="text-xs font-bold text-on-surface dark:text-gray-200 block truncate">
+                                  <div className="overflow-hidden min-w-0 flex-1">
+                                    <div className="flex items-center gap-1.5 min-w-0">
+                                      <span className="text-xs font-bold text-on-surface dark:text-gray-200 truncate">
                                         {studentName}
                                       </span>
                                       {isMyProject && (
-                                        <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-primary text-white">
+                                        <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-primary text-white shrink-0">
                                           YOU
                                         </span>
                                       )}
                                       {!canViewSourceCode && (
-                                        <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30">
+                                        <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30 shrink-0">
                                           🔒 Live Only
                                         </span>
                                       )}
                                     </div>
-                                    <span className="text-[10px] text-on-surface-variant/70 dark:text-gray-400 block -mt-0.5">
+                                    <span className="text-[10px] text-on-surface-variant/70 dark:text-gray-400 block -mt-0.5 truncate">
                                       {isTeacherOwner ? 'Instructor Starter' : `@${project.student?.username || 'student'}`}
                                     </span>
                                   </div>
@@ -712,7 +712,7 @@ export default function TeacherSessionsDashboard() {
                                 {canDelete && (
                                   <button
                                     onClick={(e) => handleDeleteProject(project.id, e)}
-                                    className="p-1.5 text-on-surface-variant/40 hover:text-error dark:hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100 rounded-lg hover:bg-surface-container dark:hover:bg-gray-800"
+                                    className="p-1.5 text-on-surface-variant/40 hover:text-error dark:hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100 rounded-lg hover:bg-surface-container dark:hover:bg-gray-800 shrink-0 min-h-[36px] min-w-[36px] flex items-center justify-center"
                                     title="Delete Folder"
                                   >
                                     <Trash2 className="w-3.5 h-3.5" />
@@ -721,40 +721,40 @@ export default function TeacherSessionsDashboard() {
                               </div>
 
                               {/* Folder Name & Description */}
-                              <div>
-                                <h3 className="text-sm font-bold text-on-surface dark:text-gray-100 group-hover:text-primary transition-colors flex items-center gap-1.5">
+                              <div className="min-w-0">
+                                <h3 className="text-sm font-bold text-on-surface dark:text-gray-100 group-hover:text-primary transition-colors flex items-center gap-1.5 min-w-0">
                                   <Folder className="w-4 h-4 text-amber-500 shrink-0" />
-                                  <span className="line-clamp-1">{project.name}</span>
+                                  <span className="truncate">{project.name}</span>
                                 </h3>
                                 {project.description && (
-                                  <p className="text-xs text-on-surface-variant dark:text-gray-400 line-clamp-2 mt-1">
+                                  <p className="text-xs text-on-surface-variant dark:text-gray-400 line-clamp-2 mt-1 break-words">
                                     {project.description}
                                   </p>
                                 )}
                               </div>
 
                               {/* Files included pill */}
-                              <div className="text-[11px] font-mono text-on-surface-variant/80 dark:text-gray-400 bg-surface-container dark:bg-gray-900/80 px-2.5 py-1 rounded-lg border border-outline-variant/30 dark:border-gray-800 truncate">
+                              <div className="text-[11px] font-mono text-on-surface-variant/80 dark:text-gray-400 bg-surface-container dark:bg-gray-900/80 px-2.5 py-1 rounded-lg border border-outline-variant/30 dark:border-gray-800 truncate min-w-0 max-w-full">
                                 📄 {project.files.length} {project.files.length === 1 ? 'file' : 'files'}: <span className="text-primary font-semibold">{fileNames}</span>
                               </div>
                             </div>
 
                             {/* Action Buttons: Live Preview & Source Code */}
-                            <div className="pt-2.5 border-t border-surface-container/60 dark:border-gray-800/80 flex items-center justify-between gap-2 text-xs">
+                            <div className="pt-2.5 border-t border-surface-container/60 dark:border-gray-800/80 flex flex-wrap sm:flex-nowrap items-center justify-between gap-2 text-xs min-w-0">
                               <span className="text-[10px] text-on-surface-variant/60 dark:text-gray-500 shrink-0">
                                 {new Date(project.updated_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                               </span>
 
-                              <div className="flex items-center gap-1.5">
+                              <div className="flex items-center gap-1.5 shrink-0">
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     window.open(`/preview?project=${project.id}`, '_blank');
                                   }}
-                                  className="flex items-center gap-1 px-2.5 py-1 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 font-bold rounded-lg text-xs transition-colors border border-emerald-500/20"
+                                  className="flex items-center gap-1 px-2.5 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 font-bold rounded-lg text-xs transition-colors border border-emerald-500/20 min-h-[36px]"
                                   title="Preview student website in a new tab"
                                 >
-                                  <Globe className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                                  <Globe className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
                                   <span>{canViewSourceCode ? 'Live Web' : 'Live Preview'}</span>
                                 </button>
 
@@ -764,10 +764,10 @@ export default function TeacherSessionsDashboard() {
                                       e.stopPropagation();
                                       router.push(`/projects/${project.id}`);
                                     }}
-                                    className="flex items-center gap-1 px-2.5 py-1 bg-primary/10 hover:bg-primary/20 text-primary dark:text-primary-light font-bold rounded-lg text-xs transition-colors border border-primary/20"
+                                    className="flex items-center gap-1 px-2.5 py-1.5 bg-primary/10 hover:bg-primary/20 text-primary dark:text-primary-light font-bold rounded-lg text-xs transition-colors border border-primary/20 min-h-[36px]"
                                     title={isTeacher ? "Inspect student source code in Read-Only Mode" : "Open in Code Editor"}
                                   >
-                                    <Code2 className="w-3.5 h-3.5" />
+                                    <Code2 className="w-3.5 h-3.5 shrink-0" />
                                     <span>{isMyProject ? 'Edit Code' : 'Inspect Code'}</span>
                                   </button>
                                 )}
