@@ -245,22 +245,33 @@ function LivePreviewContent() {
             return;
           }
 
-          // 2. Relative project file link (e.g. "lain.html", "./lain.html", "about.html")
-          var isExternal = href.startsWith('http://') || href.startsWith('https://') || href.startsWith('//') || href.startsWith('mailto:') || href.startsWith('tel:');
-          if (!isExternal) {
-            var cleanFileName = href.replace(/^(\.\/|\/)/, '');
+          // 2. Public / External web links: e.g. "https://google.com", "http://...", "www.youtube.com", "instagram.com"
+          var isExternal = href.startsWith('http://') || 
+                           href.startsWith('https://') || 
+                           href.startsWith('//') || 
+                           href.startsWith('mailto:') || 
+                           href.startsWith('tel:') || 
+                           href.startsWith('www.') || 
+                           /^[a-zA-Z0-9-]+\.(com|org|net|id|io|edu|gov|co|app|dev)(\/|$|\?)/i.test(href);
+
+          if (isExternal) {
+            var finalUrl = href;
+            if (!href.startsWith('http://') && !href.startsWith('https://') && !href.startsWith('//') && !href.startsWith('mailto:') && !href.startsWith('tel:')) {
+              finalUrl = 'https://' + href;
+            }
             try {
-              window.parent.postMessage({ type: 'NAVIGATE_LOCAL_FILE', fileName: cleanFileName }, '*');
-            } catch(err) {}
+              window.parent.postMessage({ type: 'OPEN_EXTERNAL_URL', url: finalUrl }, '*');
+            } catch(err) {
+              window.open(finalUrl, '_blank', 'noopener,noreferrer');
+            }
             return;
           }
 
-          // 3. External web link: open safely in new tab
+          // 3. Relative project file link: e.g. "lain.html", "./lain.html", "about.html"
+          var cleanFileName = href.replace(/^(\.\/|\/)/, '');
           try {
-            window.parent.postMessage({ type: 'OPEN_EXTERNAL_URL', url: href }, '*');
-          } catch(err) {
-            window.open(href, '_blank', 'noopener,noreferrer');
-          }
+            window.parent.postMessage({ type: 'NAVIGATE_LOCAL_FILE', fileName: cleanFileName }, '*');
+          } catch(err) {}
         }
       }
     }
