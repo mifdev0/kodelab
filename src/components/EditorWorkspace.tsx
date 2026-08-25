@@ -491,11 +491,20 @@ export default function EditorWorkspace({ initialMeetingId }: EditorWorkspacePro
   // Auto-sync payload to BroadcastChannel & localStorage for "Go Live" new tab preview
   useEffect(() => {
     try {
+      const htmlFilesMap: { [name: string]: string } = {};
+      files.forEach(f => {
+        if (f.language === 'html' || f.name.endsWith('.html')) {
+          htmlFilesMap[f.name] = f.content;
+        }
+      });
+
       const payload = {
         html: previewHtml,
         css: previewCss,
         js: previewJs,
         assets: assetsMap,
+        htmlFiles: htmlFilesMap,
+        currentFile: activeFile?.name || 'index.html',
         timestamp: Date.now(),
       };
       localStorage.setItem('kodelab_preview_payload', JSON.stringify(payload));
@@ -505,7 +514,39 @@ export default function EditorWorkspace({ initialMeetingId }: EditorWorkspacePro
         channel.close();
       }
     } catch (e) {}
-  }, [previewHtml, previewCss, previewJs, assetsMap]);
+  }, [previewHtml, previewCss, previewJs, assetsMap, files, activeFile]);
+
+  // Navigate to local HTML file when clicking relative <a href="lain.html"> links in live preview
+  const handleNavigateFile = useCallback((fileName: string) => {
+    if (!files || files.length === 0) return;
+    const cleanTarget = fileName.trim().toLowerCase();
+
+    const matchedFile = files.find(f => {
+      const name = f.name.toLowerCase();
+      return name === cleanTarget || 
+             name === `${cleanTarget}.html` || 
+             name.replace(/\.html$/, '') === cleanTarget;
+    });
+
+    if (matchedFile) {
+      setActiveFileId(matchedFile.id);
+    } else {
+      const targetName = fileName.includes('.') ? fileName : `${fileName}.html`;
+      setConfirmDialog({
+        isOpen: true,
+        title: 'Halaman Belum Dibuat',
+        message: `File "${targetName}" belum ada di folder ini. Mau buat file "${targetName}" sekarang agar halaman ini bisa terbuka?`,
+        confirmText: '+ Buat File Sekarang',
+        cancelText: 'Batal',
+        showCancel: true,
+        onConfirm: () => {
+          setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+          setNewFileNameInput(targetName);
+          setIsNewFileModalOpen(true);
+        }
+      });
+    }
+  }, [files]);
 
   const handleFormatCode = () => {
     if (isReadOnly || !activeFile || activeFile.language === 'image') return;
@@ -1067,6 +1108,7 @@ export default function EditorWorkspace({ initialMeetingId }: EditorWorkspacePro
                   cssCode={previewCss}
                   jsCode={previewJs}
                   assets={assetsMap}
+                  onNavigateFile={handleNavigateFile}
                   onClose={() => {
                     setShowSidePreview(false);
                     setMobileTab('editor');

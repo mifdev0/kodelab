@@ -8,6 +8,9 @@ interface LivePreviewProps {
   cssCode: string;
   jsCode: string;
   assets?: { [fileName: string]: string }; // Name -> Data URL
+  onNavigateFile?: (fileName: string) => void;
+  isFullscreen?: boolean;
+  onToggleFullscreen?: () => void;
   onClose?: () => void;
   onGoLive?: () => void;
 }
@@ -21,6 +24,7 @@ export default function LivePreview({
   cssCode,
   jsCode,
   assets = {},
+  onNavigateFile,
   isFullscreen = false,
   onToggleFullscreen,
   onClose,
@@ -32,12 +36,18 @@ export default function LivePreview({
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [renderKey, setRenderKey] = useState(0);
 
-  // Listen to postMessage from iframe to open external links cleanly in parent window
+  // Listen to postMessage from iframe to open external links cleanly in parent window or navigate local files
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
-      if (event.data && event.data.type === 'OPEN_EXTERNAL_URL' && event.data.url) {
+      if (!event.data) return;
+
+      if (event.data.type === 'NAVIGATE_LOCAL_FILE' && event.data.fileName) {
+        if (onNavigateFile) {
+          onNavigateFile(event.data.fileName);
+        }
+      } else if (event.data.type === 'OPEN_EXTERNAL_URL' && event.data.url) {
         let url = event.data.url.trim();
-        if (!url.startsWith('http://') && !url.startsWith('https://') && !url.startsWith('//')) {
+        if (!url.startsWith('http://') && !url.startsWith('https://') && !url.startsWith('//') && !url.startsWith('mailto:') && !url.startsWith('tel:')) {
           url = 'https://' + url;
         }
         window.open(url, '_blank', 'noopener,noreferrer');
@@ -46,7 +56,7 @@ export default function LivePreview({
 
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
-  }, []);
+  }, [onNavigateFile]);
 
   // Debounce code updates (350ms) per PRD performance requirement
   useEffect(() => {
@@ -139,7 +149,7 @@ export default function LivePreview({
     window.onerror = function() { return true; };
     window.addEventListener('unhandledrejection', function(e) { e.preventDefault(); });
 
-    // Global Link Click Handler: delegates to parent window to open outside sandbox
+    // Global Link Click Handler: delegates to parent window for local page navigation or external links
     function handleLinkClick(e) {
       var target = e.target;
       while (target && target.tagName !== 'A') {
@@ -148,22 +158,34 @@ export default function LivePreview({
       if (target && target.tagName === 'A') {
         var rawHref = target.getAttribute('href');
         if (rawHref) {
-          e.preventDefault();
-          e.stopPropagation();
           var href = rawHref.trim();
           if (!href || href === '#' || href.startsWith('javascript:')) return;
-          
-          var finalUrl = href;
-          if (!href.startsWith('http://') && !href.startsWith('https://') && !href.startsWith('//') && !href.startsWith('mailto:') && !href.startsWith('tel:')) {
-            if (href.includes('.')) {
-              finalUrl = 'https://' + href;
-            }
+
+          e.preventDefault();
+          e.stopPropagation();
+
+          // 1. In-page anchor link (e.g. #about)
+          if (href.startsWith('#')) {
+            var el = document.getElementById(href.slice(1)) || document.querySelector('[name="' + href.slice(1) + '"]');
+            if (el) el.scrollIntoView({ behavior: 'smooth' });
+            return;
           }
-          
+
+          // 2. Relative project file link (e.g. "lain.html", "./lain.html", "about.html")
+          var isExternal = href.startsWith('http://') || href.startsWith('https://') || href.startsWith('//') || href.startsWith('mailto:') || href.startsWith('tel:');
+          if (!isExternal) {
+            var cleanFileName = href.replace(/^(\.\/|\/)/, '');
+            try {
+              window.parent.postMessage({ type: 'NAVIGATE_LOCAL_FILE', fileName: cleanFileName }, '*');
+            } catch(err) {}
+            return;
+          }
+
+          // 3. External web link: open safely in new tab
           try {
-            window.parent.postMessage({ type: 'OPEN_EXTERNAL_URL', url: finalUrl }, '*');
+            window.parent.postMessage({ type: 'OPEN_EXTERNAL_URL', url: href }, '*');
           } catch(err) {
-            window.open(finalUrl, '_blank', 'noopener,noreferrer');
+            window.open(href, '_blank', 'noopener,noreferrer');
           }
         }
       }

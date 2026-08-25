@@ -19,6 +19,8 @@ function LivePreviewContent() {
   const [cssCode, setCssCode] = useState('');
   const [jsCode, setJsCode] = useState('');
   const [assets, setAssets] = useState<{ [name: string]: string }>({});
+  const [htmlFiles, setHtmlFiles] = useState<{ [name: string]: string }>({});
+  const [currentHtmlFile, setCurrentHtmlFile] = useState<string>('index.html');
   const [renderKey, setRenderKey] = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
@@ -31,10 +33,16 @@ function LivePreviewContent() {
           setProject(proj);
           const files = proj.files || [];
           
-          const mainHtml = files
-            .filter(f => f.language === 'html' || f.name.endsWith('.html'))
-            .map(f => f.content)
-            .join('\n\n');
+          const htmlMap: { [name: string]: string } = {};
+          let indexContent = '';
+          files.forEach(f => {
+            if (f.language === 'html' || f.name.endsWith('.html')) {
+              htmlMap[f.name] = f.content;
+              if (f.name.toLowerCase() === 'index.html' || !indexContent) {
+                indexContent = f.content;
+              }
+            }
+          });
 
           const allCss = files
             .filter(f => f.language === 'css' || f.name.endsWith('.css'))
@@ -53,7 +61,8 @@ function LivePreviewContent() {
             }
           });
 
-          setHtmlCode(mainHtml);
+          setHtmlFiles(htmlMap);
+          setHtmlCode(indexContent);
           setCssCode(allCss);
           setJsCode(allJs);
           setAssets(assetsMap);
@@ -74,6 +83,7 @@ function LivePreviewContent() {
         setCssCode(parsed.css || '');
         setJsCode(parsed.js || '');
         setAssets(parsed.assets || {});
+        if (parsed.htmlFiles) setHtmlFiles(parsed.htmlFiles);
       }
     } catch (e) {
       console.error('Failed to load initial preview payload', e);
@@ -91,6 +101,9 @@ function LivePreviewContent() {
           if (event.data.assets) {
             setAssets(event.data.assets);
           }
+          if (event.data.htmlFiles) {
+            setHtmlFiles(event.data.htmlFiles);
+          }
         }
       };
     } catch (e) {
@@ -106,6 +119,7 @@ function LivePreviewContent() {
           setCssCode(parsed.css || '');
           setJsCode(parsed.js || '');
           setAssets(parsed.assets || {});
+          if (parsed.htmlFiles) setHtmlFiles(parsed.htmlFiles);
         } catch (err) {}
       }
     };
@@ -117,12 +131,26 @@ function LivePreviewContent() {
     };
   }, [projectIdParam]);
 
-  // Listen to postMessage from iframe to open external links cleanly
+  // Listen to postMessage from iframe for relative file navigation and external links
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
-      if (event.data && event.data.type === 'OPEN_EXTERNAL_URL' && event.data.url) {
+      if (!event.data) return;
+
+      if (event.data.type === 'NAVIGATE_LOCAL_FILE' && event.data.fileName) {
+        const target = event.data.fileName.trim().toLowerCase();
+        // Look up file in htmlFiles
+        const matchedKey = Object.keys(htmlFiles).find(k => {
+          const lk = k.toLowerCase();
+          return lk === target || lk === `${target}.html` || lk.replace(/\.html$/, '') === target;
+        });
+
+        if (matchedKey && htmlFiles[matchedKey] !== undefined) {
+          setCurrentHtmlFile(matchedKey);
+          setHtmlCode(htmlFiles[matchedKey]);
+        }
+      } else if (event.data.type === 'OPEN_EXTERNAL_URL' && event.data.url) {
         let url = event.data.url.trim();
-        if (!url.startsWith('http://') && !url.startsWith('https://') && !url.startsWith('//')) {
+        if (!url.startsWith('http://') && !url.startsWith('https://') && !url.startsWith('//') && !url.startsWith('mailto:') && !url.startsWith('tel:')) {
           url = 'https://' + url;
         }
         window.open(url, '_blank', 'noopener,noreferrer');
@@ -131,7 +159,7 @@ function LivePreviewContent() {
 
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
-  }, []);
+  }, [htmlFiles]);
 
   // Combine HTML + CSS + JS into single sandboxed document
   const combinedSrcDoc = useMemo(() => {
@@ -197,6 +225,7 @@ function LivePreviewContent() {
     window.onerror = function() { return true; };
     window.addEventListener('unhandledrejection', function(e) { e.preventDefault(); });
 
+    // Global Link Click Handler: delegates to parent window for local page navigation or external links
     function handleLinkClick(e) {
       var target = e.target;
       while (target && target.tagName !== 'A') {
@@ -205,21 +234,34 @@ function LivePreviewContent() {
       if (target && target.tagName === 'A') {
         var rawHref = target.getAttribute('href');
         if (rawHref) {
-          e.preventDefault();
-          e.stopPropagation();
           var href = rawHref.trim();
           if (!href || href === '#' || href.startsWith('javascript:')) return;
-          
-          var finalUrl = href;
-          if (!href.startsWith('http://') && !href.startsWith('https://') && !href.startsWith('//') && !href.startsWith('mailto:') && !href.startsWith('tel:')) {
-            if (href.includes('.')) {
-              finalUrl = 'https://' + href;
-            }
+
+          e.preventDefault();
+          e.stopPropagation();
+
+          // 1. In-page anchor link (e.g. #about)
+          if (href.startsWith('#')) {
+            var el = document.getElementById(href.slice(1)) || document.querySelector('[name="' + href.slice(1) + '"]');
+            if (el) el.scrollIntoView({ behavior: 'smooth' });
+            return;
           }
+
+          // 2. Relative project file link (e.g. "lain.html", "./lain.html", "about.html")
+          var isExternal = href.startsWith('http://') || href.startsWith('https://') || href.startsWith('//') || href.startsWith('mailto:') || href.startsWith('tel:');
+          if (!isExternal) {
+            var cleanFileName = href.replace(/^(\.\/|\/)/, '');
+            try {
+              window.parent.postMessage({ type: 'NAVIGATE_LOCAL_FILE', fileName: cleanFileName }, '*');
+            } catch(err) {}
+            return;
+          }
+
+          // 3. External web link: open safely in new tab
           try {
-            window.parent.postMessage({ type: 'OPEN_EXTERNAL_URL', url: finalUrl }, '*');
+            window.parent.postMessage({ type: 'OPEN_EXTERNAL_URL', url: href }, '*');
           } catch(err) {
-            window.open(finalUrl, '_blank', 'noopener,noreferrer');
+            window.open(href, '_blank', 'noopener,noreferrer');
           }
         }
       }
