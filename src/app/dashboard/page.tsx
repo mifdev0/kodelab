@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { store } from '@/lib/store';
@@ -39,6 +39,7 @@ export default function TeacherSessionsDashboard() {
   const { user } = useAuth();
   const { isSidebarOpen, toggleSidebar } = useLayout();
   const { theme, toggleTheme } = useTheme();
+  const detailSectionRef = useRef<HTMLElement>(null);
 
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [selectedMeetingId, setSelectedMeetingId] = useState<string>('');
@@ -127,6 +128,12 @@ export default function TeacherSessionsDashboard() {
   const handleSelectMeeting = (meetingId: string) => {
     setSelectedMeetingId(meetingId);
     loadProjectsForMeeting(meetingId);
+    // On mobile / compact tablet screens, smoothly scroll directly to the selected session workspace
+    if (typeof window !== 'undefined' && window.innerWidth < 1024 && detailSectionRef.current) {
+      setTimeout(() => {
+        detailSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 60);
+    }
   };
 
   const handleToggleSessionStatus = async (meetingId: string, e: React.MouseEvent) => {
@@ -403,7 +410,7 @@ export default function TeacherSessionsDashboard() {
               </span>
             </div>
 
-            <div className="space-y-2.5 h-[calc(100vh-200px)] overflow-y-auto pr-1 pb-4">
+            <div className="space-y-2.5 max-h-60 sm:max-h-72 md:max-h-none md:h-[calc(100vh-200px)] overflow-y-auto pr-1 pb-4">
               {meetings.map((meeting, index) => {
                 const isSelected = meeting.id === selectedMeetingId;
                 const projs = store.getProjectsByMeeting(meeting.id);
@@ -503,7 +510,10 @@ export default function TeacherSessionsDashboard() {
           </aside>
 
           {/* Right Column: Session Folder Inspector & Student Grid */}
-          <main className="md:col-span-7 lg:col-span-8 min-w-0 space-y-4 h-[calc(100vh-200px)] overflow-y-auto pb-4 pr-1">
+          <main 
+            ref={detailSectionRef} 
+            className="md:col-span-7 lg:col-span-8 min-w-0 space-y-4 h-auto md:h-[calc(100vh-200px)] overflow-y-auto pb-4 pr-1 scroll-mt-24"
+          >
             
             {/* Active Session Detail Card */}
             {selectedMeeting ? (
@@ -539,65 +549,68 @@ export default function TeacherSessionsDashboard() {
                   </div>
                 </div>
 
-                {/* Session Header Controls */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-surface-container dark:border-gray-800 min-w-0">
-                  <div className="space-y-1 min-w-0 flex-1">
+                {/* Session Header Controls: Clean grouped badges and buttons on top row, full width description below */}
+                <div className="space-y-3 pb-3 border-b border-surface-container dark:border-gray-800 min-w-0">
+                  <div className="flex flex-wrap items-center justify-between gap-2.5 min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-xs font-bold px-2.5 py-0.5 rounded-md bg-primary/15 text-primary dark:text-primary-light border border-primary/25 flex items-center gap-1 shrink-0">
-                        <Calendar className="w-3 h-3 shrink-0" />
+                      <span className="text-xs font-bold px-2.5 py-1 rounded-lg bg-primary/15 text-primary dark:text-primary-light border border-primary/25 flex items-center gap-1.5 shrink-0">
+                        <Calendar className="w-3.5 h-3.5 shrink-0 text-primary" />
                         <span>Dibuat: {new Date(selectedMeeting.created_at || selectedMeeting.meeting_date || Date.now()).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
                       </span>
                       {selectedMeeting.is_active ? (
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20 shrink-0">
-                          🟢 Active / Open
+                        <span className="text-xs font-bold px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20 shrink-0 flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                          Active / Open
                         </span>
                       ) : (
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20 shrink-0">
+                        <span className="text-xs font-bold px-2.5 py-1 rounded-lg bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20 shrink-0 flex items-center gap-1.5">
                           🔒 Closed (Read-Only)
                         </span>
                       )}
                     </div>
-                    {selectedMeeting.description && (
-                      <p className="text-xs text-on-surface-variant dark:text-gray-400 break-words">
-                        {selectedMeeting.description}
-                      </p>
-                    )}
+
+                    {/* Header Actions */}
+                    <div className="flex flex-wrap items-center gap-2">
+                      {isTeacher && (
+                        <button
+                          onClick={(e) => handleToggleSessionStatus(selectedMeeting.id, e)}
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-colors border min-h-[38px] ${
+                            selectedMeeting.is_active
+                              ? 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/20 hover:bg-amber-500/20'
+                              : 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/20 hover:bg-emerald-500/20'
+                          }`}
+                        >
+                          <span>{selectedMeeting.is_active ? '🔒 Lock Session' : '🔓 Unlock Session'}</span>
+                        </button>
+                      )}
+
+                      {/* Create Folder in this Session button */}
+                      {!selectedMeeting.is_active && !isTeacher ? (
+                        <button
+                          disabled
+                          className="flex items-center gap-1.5 px-3.5 py-1.5 bg-surface-container dark:bg-gray-800 text-on-surface-variant/50 dark:text-gray-500 rounded-xl text-xs font-bold cursor-not-allowed min-h-[38px]"
+                          title="This session has been closed by the instructor."
+                        >
+                          <span>🔒 Session Closed</span>
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => setIsNewFolderModalOpen(true)}
+                          className="flex items-center gap-1.5 px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-xs transition-colors min-h-[38px]"
+                        >
+                          <FolderPlus className="w-4 h-4 shrink-0" />
+                          <span>{isTeacher ? '+ New Starter / Folder' : '+ Create My Folder'}</span>
+                        </button>
+                      )}
+                    </div>
                   </div>
 
-                  {/* Header Actions */}
-                  <div className="flex flex-wrap items-center gap-2 shrink-0">
-                    {isTeacher && (
-                      <button
-                        onClick={(e) => handleToggleSessionStatus(selectedMeeting.id, e)}
-                        className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-colors border min-h-[44px] ${
-                          selectedMeeting.is_active
-                            ? 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/20 hover:bg-amber-500/20'
-                            : 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/20 hover:bg-emerald-500/20'
-                        }`}
-                      >
-                        <span>{selectedMeeting.is_active ? '🔒 Lock Session' : '🔓 Unlock Session'}</span>
-                      </button>
-                    )}
-
-                    {/* Create Folder in this Session button */}
-                    {!selectedMeeting.is_active && !isTeacher ? (
-                      <button
-                        disabled
-                        className="flex items-center gap-1.5 px-3.5 sm:px-4 py-2 bg-surface-container dark:bg-gray-800 text-on-surface-variant/50 dark:text-gray-500 rounded-xl text-xs sm:text-sm font-bold cursor-not-allowed min-h-[44px]"
-                        title="This session has been closed by the instructor."
-                      >
-                        <span>🔒 Session Closed</span>
-                      </button>
-                    ) : (
-                      <button
-                        onClick={() => setIsNewFolderModalOpen(true)}
-                        className="flex items-center gap-1.5 px-3.5 sm:px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs sm:text-sm font-bold shadow-xs transition-colors min-h-[44px]"
-                      >
-                        <FolderPlus className="w-4 h-4 shrink-0" />
-                        <span>{isTeacher ? '+ New Starter / Folder' : '+ Create My Folder'}</span>
-                      </button>
-                    )}
-                  </div>
+                  {/* Full Width Session Description */}
+                  {selectedMeeting.description && (
+                    <div className="w-full bg-surface-container-low/60 dark:bg-gray-900/60 p-3 rounded-xl border border-surface-container/60 dark:border-gray-800 text-xs text-on-surface-variant dark:text-gray-300 leading-relaxed break-words">
+                      {selectedMeeting.description}
+                    </div>
+                  )}
                 </div>
 
                 {/* Read-Only Notice Banner if Session is Closed */}
