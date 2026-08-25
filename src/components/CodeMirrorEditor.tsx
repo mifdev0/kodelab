@@ -614,26 +614,35 @@ const matchingTagPlugin = ViewPlugin.fromClass(class {
     const { state } = view;
     const selection = state.selection.main;
 
-    // Only highlight tag pair when user double-clicks / selects a tag (ignore single click)
+    // 1. Must be non-empty (selection active)
     if (selection.empty) {
       return Decoration.none;
     }
 
-    const pos = selection.from;
-    const tree = syntaxTree(state);
-
-    if (!tree) return Decoration.none;
-
-    let node = tree.resolveInner(pos, 1);
-    let tagNode: any = node;
-
-    // Walk up to find OpenTag, CloseTag, or SelfClosingTag
-    while (tagNode && !['OpenTag', 'CloseTag', 'SelfClosingTag'].includes(tagNode.name) && tagNode.parent) {
-      if (tagNode.name === 'Element') break;
-      tagNode = tagNode.parent;
+    // 2. Must be a single word (double-click selection, no spaces, no newlines, max 25 chars)
+    const selectedText = state.sliceDoc(selection.from, selection.to).trim();
+    if (!selectedText || selectedText.length > 25 || /\s/.test(selectedText) || !/^[a-zA-Z0-9_-]+$/.test(selectedText)) {
+      return Decoration.none;
     }
 
-    if (!tagNode) return Decoration.none;
+    const tree = syntaxTree(state);
+    if (!tree) return Decoration.none;
+
+    // 3. Resolve the syntax node at the selection
+    const node = tree.resolveInner(selection.from, 1);
+    if (!node) return Decoration.none;
+
+    // 4. Must be specifically a TagName syntax node
+    let tagNode: any = null;
+    if (node.name === 'TagName') {
+      tagNode = node.parent; // OpenTag, CloseTag, or SelfClosingTag
+    } else if (node.parent && node.parent.name === 'TagName') {
+      tagNode = node.parent.parent;
+    }
+
+    if (!tagNode || !['OpenTag', 'CloseTag', 'SelfClosingTag'].includes(tagNode.name)) {
+      return Decoration.none;
+    }
 
     const decorations: any[] = [];
 
