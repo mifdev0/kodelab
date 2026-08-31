@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useMemo, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { store } from '@/lib/store';
+import { useAuth } from '@/lib/auth-context';
 import { UserProject } from '@/types';
 import { RefreshCw, Code2, ExternalLink, Globe } from 'lucide-react';
 
@@ -59,6 +60,7 @@ function transformHtmlLinks(rawHtml: string): string {
 function LivePreviewContent() {
   const searchParams = useSearchParams();
   const projectIdParam = searchParams.get('project');
+  const { user } = useAuth();
 
   const [project, setProject] = useState<UserProject | null>(null);
   const [htmlCode, setHtmlCode] = useState('');
@@ -69,6 +71,11 @@ function LivePreviewContent() {
   const [currentHtmlFile, setCurrentHtmlFile] = useState<string>('index.html');
   const [renderKey, setRenderKey] = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Determine if viewer can access source code in editor (only author or teacher)
+  const isOwner = Boolean(user && project && (user.id === project.student_id));
+  const isTeacher = user?.role === 'teacher';
+  const canAccessSourceCode = isOwner || isTeacher;
 
   // Load project by ID or listen to live broadcast
   useEffect(() => {
@@ -389,13 +396,22 @@ ${content}
             >
               <RefreshCw className="w-3.5 h-3.5" />
             </button>
-            <a
-              href={`/projects/${project.id}`}
-              className="flex items-center gap-1.5 px-2.5 py-1 bg-primary text-white hover:bg-primary-hover rounded-lg text-xs font-bold transition-colors"
-            >
-              <Code2 className="w-3.5 h-3.5" />
-              <span>Source Code</span>
-            </a>
+
+            {canAccessSourceCode ? (
+              <a
+                href={`/projects/${project.id}`}
+                className="flex items-center gap-1.5 px-2.5 py-1 bg-primary text-white hover:bg-primary-hover rounded-lg text-xs font-bold transition-colors"
+                title={isOwner ? "Open and edit in Code Editor" : "Inspect student code (Read-Only)"}
+              >
+                <Code2 className="w-3.5 h-3.5" />
+                <span>{isOwner ? 'Edit Code' : 'Inspect Code'}</span>
+              </a>
+            ) : (
+              <span className="text-[11px] font-bold text-slate-400 bg-slate-800/90 px-2.5 py-1 rounded-lg border border-slate-700/60 flex items-center gap-1.5 shadow-2xs">
+                <Globe className="w-3 h-3 text-emerald-400" />
+                <span>Live Web View</span>
+              </span>
+            )}
           </div>
         </div>
       )}

@@ -149,7 +149,14 @@ export default function EditorWorkspace({ initialMeetingId }: EditorWorkspacePro
   }, [user?.id, initialMeetingId]);
 
   const loadFolders = () => {
-    if (!user) return;
+    if (!user) {
+      if (initialMeetingId) {
+        window.location.href = `/preview?project=${initialMeetingId}`;
+        return;
+      }
+      window.location.href = '/login';
+      return;
+    }
 
     const projectList = user.role === 'teacher'
       ? store.getUserProjects()
