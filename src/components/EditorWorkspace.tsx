@@ -751,14 +751,18 @@ export default function EditorWorkspace({ initialMeetingId }: EditorWorkspacePro
     window.open(targetUrl, 'kodelab_live_preview_tab');
   }, [files, previewHtml, previewCss, previewJs, assetsMap, activeFile, activeFolderId, folderName, activeProject]);
 
-  // Navigate to local HTML file when clicking relative <a href="lain.html"> links in live preview
+  // Navigate to local HTML / Image / Asset file when clicking relative <a href="..."> links in live preview
   const handleNavigateFile = useCallback((fileName: string) => {
     if (!files || files.length === 0) return;
-    const cleanTarget = fileName.trim().toLowerCase();
+    const cleanTarget = fileName.trim().toLowerCase().replace(/^(\.\/|\/)/, '');
+    const baseTarget = cleanTarget.split('/').pop() || cleanTarget;
 
     const matchedFile = files.find(f => {
-      const name = f.name.toLowerCase();
+      const name = f.name.toLowerCase().replace(/^(\.\/|\/)/, '');
+      const baseName = name.split('/').pop() || name;
       return name === cleanTarget || 
+             baseName === baseTarget ||
+             name.replace(/^assets?\//, '') === cleanTarget.replace(/^assets?\//, '') ||
              name === `${cleanTarget}.html` || 
              name.replace(/\.html$/, '') === cleanTarget;
     });
@@ -769,8 +773,8 @@ export default function EditorWorkspace({ initialMeetingId }: EditorWorkspacePro
       const targetName = fileName.includes('.') ? fileName : `${fileName}.html`;
       setConfirmDialog({
         isOpen: true,
-        title: 'Halaman Belum Dibuat',
-        message: `File "${targetName}" belum ada di folder ini. Mau buat file "${targetName}" sekarang agar halaman ini bisa terbuka?`,
+        title: 'File Belum Dibuat',
+        message: `File "${targetName}" belum ada di folder ini. Mau buat file "${targetName}" sekarang agar file ini bisa terbuka?`,
         confirmText: '+ Buat File Sekarang',
         cancelText: 'Batal',
         showCancel: true,

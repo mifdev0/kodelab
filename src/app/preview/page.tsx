@@ -11,7 +11,7 @@ function escapeRegExp(string: string) {
   return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-function transformHtmlLinks(rawHtml: string): string {
+function transformHtmlLinks(rawHtml: string, assets?: { [name: string]: string }): string {
   if (!rawHtml) return '';
 
   return rawHtml.replace(/<a\b([^>]*)>/gi, (match, attrs) => {
@@ -40,7 +40,32 @@ function transformHtmlLinks(rawHtml: string): string {
       return `<a href="javascript:void(0)" data-kodelab-anchor="${escapedTarget}" onclick="try{var tid='${escapedTarget}';var el=document.getElementById(tid)||document.querySelector('[name=\\''+tid+'\\']');if(el){el.scrollIntoView({behavior:'smooth',block:'start'});}}catch(e){}return false;" ${cleanedAttrs}>`;
     }
 
-    // 2. External links
+    const cleanFileName = rawHref.replace(/^(\.\/|\/)/, '');
+
+    // 2. Media / Image files (e.g. asset/foto.png, logo.svg)
+    const isMedia = /\.(png|jpg|jpeg|svg|gif|webp|ico|bmp|mp4|webm|mp3|wav|pdf)$/i.test(cleanFileName);
+    if (isMedia && assets && Object.keys(assets).length > 0) {
+      const baseName = cleanFileName.split('/').pop()?.toLowerCase() || '';
+      const matchedKey = Object.keys(assets).find(k => {
+        const lk = k.toLowerCase().replace(/^(\.\/|\/)/, '');
+        const lkBase = lk.split('/').pop() || lk;
+        return lk === cleanFileName.toLowerCase() || 
+               lkBase === baseName ||
+               lk.replace(/^assets?\//, '') === cleanFileName.replace(/^assets?\//, '');
+      });
+
+      if (matchedKey && assets[matchedKey]) {
+        const dataUrl = assets[matchedKey];
+        const cleanedAttrs = attrs
+          .replace(/href=(?:"[^"]*"|'[^']*'|[^>\s]+)/i, '')
+          .replace(/target=(?:"[^"]*"|'[^']*'|[^>\s]+)/i, '')
+          .trim();
+
+        return `<a href="${dataUrl}" target="_blank" data-kodelab-file="${matchedKey}" onclick="try{window.parent.postMessage({type:'NAVIGATE_LOCAL_FILE',fileName:'${matchedKey}'},'*');}catch(e){}" ${cleanedAttrs}>`;
+      }
+    }
+
+    // 3. External links
     const isExternal = rawHref.startsWith('http://') || 
                        rawHref.startsWith('https://') || 
                        rawHref.startsWith('//') || 
@@ -61,8 +86,7 @@ function transformHtmlLinks(rawHtml: string): string {
       return `<a href="${finalUrl}" target="_blank" rel="noopener noreferrer" ${cleanedAttrs}>`;
     }
 
-    // 3. Relative local project file
-    const cleanFileName = rawHref.replace(/^(\.\/|\/)/, '');
+    // 4. Relative local project file
     const cleanedAttrs = attrs
       .replace(/href=(?:"[^"]*"|'[^']*'|[^>\s]+)/i, '')
       .replace(/target=(?:"[^"]*"|'[^']*'|[^>\s]+)/i, '')
@@ -268,17 +292,20 @@ function LivePreviewContent() {
     if (assets && Object.keys(assets).length > 0) {
       Object.entries(assets).forEach(([name, dataUrl]) => {
         const escaped = escapeRegExp(name);
-        const regexSrc = new RegExp(`src=['"](?:\\./)?${escaped}['"]`, 'gi');
+        const baseName = name.split('/').pop() || name;
+        const escapedBase = escapeRegExp(baseName);
+
+        const regexSrc = new RegExp(`src=['"](?:\\./)?(?:assets/|asset/)?(?:${escaped}|${escapedBase})['"]`, 'gi');
         content = content.replace(regexSrc, `src="${dataUrl}"`);
 
-        const regexUrl = new RegExp(`url\\(['"]?(?:\\./)?${escaped}['"]?\\)`, 'gi');
+        const regexUrl = new RegExp(`url\\(['"]?(?:\\./)?(?:assets/|asset/)?(?:${escaped}|${escapedBase})['"]?\\)`, 'gi');
         styleContent = styleContent.replace(regexUrl, `url('${dataUrl}')`);
         content = content.replace(regexUrl, `url('${dataUrl}')`);
       });
     }
 
     // Transform all anchor tags: local links use postMessage, external links use target="_blank"
-    content = transformHtmlLinks(content);
+    content = transformHtmlLinks(content, assets);
 
     if (!content.trim() && !styleContent.trim() && !jsCode.trim()) {
       return `<!DOCTYPE html>
