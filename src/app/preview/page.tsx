@@ -20,13 +20,27 @@ function transformHtmlLinks(rawHtml: string): string {
 
     const rawHref = (hrefMatch[1] || hrefMatch[2] || hrefMatch[3] || '').trim();
     if (!rawHref || rawHref === '#' || rawHref.startsWith('javascript:')) {
-      return match;
+      const cleanedAttrs = attrs.replace(/href=(?:"[^"]*"|'[^']*'|[^>\s]+)/i, '').trim();
+      return `<a href="javascript:void(0)" onclick="return false;" ${cleanedAttrs}>`;
     }
 
+    // 1. In-page anchor link (e.g. #beli, #section1, #top)
     if (rawHref.startsWith('#')) {
-      return match;
+      const targetId = rawHref.slice(1).trim();
+      const cleanedAttrs = attrs
+        .replace(/href=(?:"[^"]*"|'[^']*'|[^>\s]+)/i, '')
+        .replace(/target=(?:"[^"]*"|'[^']*'|[^>\s]+)/i, '')
+        .trim();
+
+      if (!targetId || targetId.toLowerCase() === 'top') {
+        return `<a href="javascript:void(0)" data-kodelab-anchor="top" onclick="try{window.scrollTo({top:0,behavior:'smooth'});}catch(e){}return false;" ${cleanedAttrs}>`;
+      }
+
+      const escapedTarget = targetId.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+      return `<a href="javascript:void(0)" data-kodelab-anchor="${escapedTarget}" onclick="try{var tid='${escapedTarget}';var el=document.getElementById(tid)||document.querySelector('[name=\\''+tid+'\\']');if(el){el.scrollIntoView({behavior:'smooth',block:'start'});}}catch(e){}return false;" ${cleanedAttrs}>`;
     }
 
+    // 2. External links
     const isExternal = rawHref.startsWith('http://') || 
                        rawHref.startsWith('https://') || 
                        rawHref.startsWith('//') || 
@@ -47,6 +61,7 @@ function transformHtmlLinks(rawHtml: string): string {
       return `<a href="${finalUrl}" target="_blank" rel="noopener noreferrer" ${cleanedAttrs}>`;
     }
 
+    // 3. Relative local project file
     const cleanFileName = rawHref.replace(/^(\.\/|\/)/, '');
     const cleanedAttrs = attrs
       .replace(/href=(?:"[^"]*"|'[^']*'|[^>\s]+)/i, '')
@@ -308,13 +323,26 @@ function LivePreviewContent() {
     window.onerror = function() { return true; };
     window.addEventListener('unhandledrejection', function(e) { e.preventDefault(); });
 
-    // Global Link Click Handler: delegates to parent window for local page navigation or external links
+    // Global Link Click Handler: delegates to parent window for local page navigation or smooth scrolls in-page anchors
     function handleLinkClick(e) {
       var target = e.target;
       while (target && target.tagName !== 'A') {
         target = target.parentElement;
       }
       if (target && target.tagName === 'A') {
+        var anchorId = target.getAttribute('data-kodelab-anchor');
+        if (anchorId) {
+          e.preventDefault();
+          e.stopPropagation();
+          if (anchorId === 'top') {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          } else {
+            var el = document.getElementById(anchorId) || document.querySelector('[name="' + anchorId + '"]');
+            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }
+          return;
+        }
+
         var rawHref = target.getAttribute('href');
         if (rawHref) {
           var href = rawHref.trim();
@@ -326,8 +354,13 @@ function LivePreviewContent() {
 
           // 1. In-page anchor link (e.g. #about)
           if (href.startsWith('#')) {
-            var el = document.getElementById(href.slice(1)) || document.querySelector('[name="' + href.slice(1) + '"]');
-            if (el) el.scrollIntoView({ behavior: 'smooth' });
+            var targetId = href.slice(1).trim();
+            if (!targetId || targetId.toLowerCase() === 'top') {
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            } else {
+              var el = document.getElementById(targetId) || document.querySelector('[name="' + targetId + '"]');
+              if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
             return;
           }
 
