@@ -545,8 +545,11 @@ export const store = {
         setStored('meetings', dbMeetings);
       }
 
-      // 3. Sync user projects & files (Supabase is Single Source of Truth)
-      const { data: dbProjects, error: prErr } = await supabase.from('user_projects').select('*, project_files(*)');
+      // 3. Sync user projects & files (Supabase is Single Source of Truth, newest first)
+      const { data: dbProjects, error: prErr } = await supabase
+        .from('user_projects')
+        .select('*, project_files(*)')
+        .order('created_at', { ascending: false });
       if (!prErr && dbProjects) {
         const formatted = dbProjects.map((p: any) => ({
           id: p.id,
@@ -616,13 +619,20 @@ export const store = {
     const projects = getStored<UserProject[]>('user_projects', INITIAL_PROJECTS);
     const profiles = this.getProfiles();
 
-    let list = projects;
+    let list = [...projects];
     if (studentId) {
       list = list.filter(p => p.student_id === studentId);
     }
     if (meetingId) {
       list = list.filter(p => p.meeting_id === meetingId);
     }
+
+    // Always sort newest project/folder at the top
+    list.sort((a, b) => {
+      const timeA = new Date(a.created_at || a.updated_at || 0).getTime();
+      const timeB = new Date(b.created_at || b.updated_at || 0).getTime();
+      return timeB - timeA;
+    });
 
     return list.map(p => ({
       ...p,
@@ -642,6 +652,12 @@ export const store = {
     if (studentId) {
       list = list.filter(p => p.student_id === studentId);
     }
+
+    list.sort((a, b) => {
+      const timeA = new Date(a.created_at || a.updated_at || 0).getTime();
+      const timeB = new Date(b.created_at || b.updated_at || 0).getTime();
+      return timeB - timeA;
+    });
 
     return list.map(p => ({
       ...p,
