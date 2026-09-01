@@ -473,43 +473,52 @@ ${content}
 
   return (
     <main className="w-screen h-screen m-0 p-0 overflow-hidden bg-white flex flex-col relative">
-      {/* Top Floating Control Bar (when viewing project directly or standalone) */}
+      {/* Top Control Bar — responsive: stacks on mobile, inline on desktop */}
       {project && (
-        <div className="h-11 bg-slate-900 text-white px-4 flex items-center justify-between border-b border-slate-800 shrink-0 select-none z-10 shadow-sm">
-          <div className="flex items-center gap-2.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
-            <span className="font-bold text-xs tracking-wide">
+        <div className="bg-slate-900 text-white px-3 sm:px-4 py-2 sm:py-0 sm:h-11 flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-800 shrink-0 select-none z-10 shadow-sm gap-1.5 sm:gap-0">
+          {/* Project info */}
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+            <span className="font-bold text-[11px] sm:text-xs tracking-wide truncate">
               {project.name}
             </span>
-            <span className="text-[11px] text-slate-400">
-              by {project.student?.full_name || 'Student'} ({project.student?.class_name || '7A'})
+            <span className="text-[10px] sm:text-[11px] text-slate-400 truncate hidden xs:inline">
+              by {project.student?.full_name || 'Student'}
             </span>
           </div>
 
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handleRefresh}
-              className={`p-1.5 rounded-lg hover:bg-slate-800 text-slate-300 hover:text-white transition-colors ${isRefreshing ? 'animate-spin' : ''}`}
-              title="Refresh Preview"
-            >
-              <RefreshCw className="w-3.5 h-3.5" />
-            </button>
+          {/* Actions row */}
+          <div className="flex items-center gap-2 shrink-0">
+            {/* Mobile-only: show student name as compact badge */}
+            <span className="text-[10px] text-slate-500 truncate max-w-[140px] sm:hidden">
+              {project.student?.full_name || 'Student'} • {project.student?.class_name || '7A'}
+            </span>
 
-            {canAccessSourceCode ? (
-              <a
-                href={`/projects/${project.id}`}
-                className="flex items-center gap-1.5 px-2.5 py-1 bg-primary text-white hover:bg-primary-hover rounded-lg text-xs font-bold transition-colors"
-                title={isOwner ? "Open and edit in Code Editor" : "Inspect student code (Read-Only)"}
+            <div className="flex items-center gap-1.5 ml-auto sm:ml-0">
+              <button
+                onClick={handleRefresh}
+                className={`p-2 sm:p-1.5 rounded-lg hover:bg-slate-800 text-slate-300 hover:text-white transition-colors ${isRefreshing ? 'animate-spin' : ''}`}
+                title="Refresh Preview"
               >
-                <Code2 className="w-3.5 h-3.5" />
-                <span>{isOwner ? 'Edit Code' : 'Inspect Code'}</span>
-              </a>
-            ) : (
-              <span className="text-[11px] font-bold text-slate-400 bg-slate-800/90 px-2.5 py-1 rounded-lg border border-slate-700/60 flex items-center gap-1.5 shadow-2xs">
-                <Globe className="w-3 h-3 text-emerald-400" />
-                <span>Live Web View</span>
-              </span>
-            )}
+                <RefreshCw className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
+              </button>
+
+              {canAccessSourceCode ? (
+                <a
+                  href={`/projects/${project.id}`}
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 sm:py-1 bg-primary text-white hover:bg-primary-hover rounded-lg text-[11px] sm:text-xs font-bold transition-colors"
+                  title={isOwner ? "Open and edit in Code Editor" : "Inspect student code (Read-Only)"}
+                >
+                  <Code2 className="w-3.5 h-3.5" />
+                  <span>{isOwner ? 'Edit' : 'Code'}</span>
+                </a>
+              ) : (
+                <span className="text-[10px] sm:text-[11px] font-bold text-slate-400 bg-slate-800/90 px-2 sm:px-2.5 py-1 rounded-lg border border-slate-700/60 flex items-center gap-1 sm:gap-1.5 shadow-2xs">
+                  <Globe className="w-3 h-3 text-emerald-400" />
+                  <span>Live</span>
+                </span>
+              )}
+            </div>
           </div>
         </div>
       )}
