@@ -273,14 +273,32 @@ export default function TeacherSessionsDashboard() {
   }, [meetings, selectedMeetingId]);
 
   const filteredProjects = useMemo(() => {
-    if (!searchQuery.trim()) return sessionProjects;
-    const q = searchQuery.toLowerCase();
-    return sessionProjects.filter(p => 
-      p.name.toLowerCase().includes(q) ||
-      p.student?.full_name.toLowerCase().includes(q) ||
-      p.description?.toLowerCase().includes(q)
-    );
-  }, [sessionProjects, searchQuery]);
+    let projs = [...sessionProjects];
+
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      projs = projs.filter(p => 
+        p.name.toLowerCase().includes(q) ||
+        p.student?.full_name?.toLowerCase().includes(q) ||
+        p.description?.toLowerCase().includes(q)
+      );
+    }
+
+    // Sort rule:
+    // 1. The current logged-in user's own folder(s) ALWAYS appear at the very top (first)!
+    // 2. Followed by other students' folders, sorted newest first.
+    return projs.sort((a, b) => {
+      const isMyA = user && a.student_id === user.id ? 1 : 0;
+      const isMyB = user && b.student_id === user.id ? 1 : 0;
+      if (isMyA !== isMyB) {
+        return isMyB - isMyA; // My folder comes first!
+      }
+
+      const timeA = new Date(a.created_at || a.updated_at || 0).getTime();
+      const timeB = new Date(b.created_at || b.updated_at || 0).getTime();
+      return timeB - timeA;
+    });
+  }, [sessionProjects, searchQuery, user?.id]);
 
   // Compute distinct students participated in this session
   const distinctStudentsCount = useMemo(() => {
