@@ -24,13 +24,34 @@ const INITIAL_MEETINGS: Meeting[] = [];
 const INITIAL_SUBMISSIONS: Submission[] = [];
 const INITIAL_PROJECTS: UserProject[] = [];
 
-// Helper functions for local state management with persistence
+// In-memory runtime cache (unlimited RAM size, bypasses browser 5MB localStorage quota)
+const memoryCache: {
+  profiles: Profile[] | null;
+  meetings: Meeting[] | null;
+  user_projects: UserProject[] | null;
+  submissions: Submission[] | null;
+  classes: ClassRoom[] | null;
+} = {
+  profiles: null,
+  meetings: null,
+  user_projects: null,
+  submissions: null,
+  classes: null,
+};
+
+// Helper functions for state management with in-memory priority + persistent fallback
 const getStored = <T>(key: string, fallback: T): T => {
+  const cached = memoryCache[key as keyof typeof memoryCache];
+  if (cached !== null && cached !== undefined) {
+    return cached as unknown as T;
+  }
   if (typeof window === 'undefined') return fallback;
   try {
     const item = localStorage.getItem(`codecamp_${key}`);
     if (!item) return fallback;
-    return JSON.parse(item);
+    const parsed = JSON.parse(item);
+    memoryCache[key as keyof typeof memoryCache] = parsed;
+    return parsed;
   } catch (e) {
     console.error('Storage get error:', e);
     return fallback;
@@ -38,11 +59,30 @@ const getStored = <T>(key: string, fallback: T): T => {
 };
 
 const setStored = <T>(key: string, value: T): void => {
+  memoryCache[key as keyof typeof memoryCache] = value as any;
   if (typeof window === 'undefined') return;
   try {
     localStorage.setItem(`codecamp_${key}`, JSON.stringify(value));
   } catch (e) {
-    console.error('Storage set error:', e);
+    // If QuotaExceededError (e.g. large uploaded images > 5MB in user_projects)
+    console.warn(`localStorage quota notice for ${key}, using in-memory cache + cloud`);
+    if (key === 'user_projects' && Array.isArray(value)) {
+      try {
+        // Strip giant base64 payloads (>30KB) for localStorage cache while keeping full in memoryCache & Supabase
+        const optimized = (value as unknown as UserProject[]).map(p => ({
+          ...p,
+          files: (p.files || []).map(f => ({
+            ...f,
+            content: (f.content && f.content.length > 30000 && f.language === 'image') 
+              ? '' 
+              : f.content,
+          }))
+        }));
+        localStorage.setItem(`codecamp_${key}`, JSON.stringify(optimized));
+      } catch (err2) {
+        console.warn('Storage optimized set notice:', err2);
+      }
+    }
   }
 };
 
