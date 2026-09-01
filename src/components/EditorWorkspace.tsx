@@ -522,6 +522,8 @@ export default function EditorWorkspace({ initialMeetingId }: EditorWorkspacePro
         assets: assetsMap,
         htmlFiles: htmlFilesMap,
         currentFile: activeFile?.name || 'index.html',
+        projectId: activeFolderId,
+        projectName: folderName || activeProject?.name || 'My Project',
         timestamp: Date.now(),
       };
       localStorage.setItem('kodelab_preview_payload', JSON.stringify(payload));
@@ -531,7 +533,43 @@ export default function EditorWorkspace({ initialMeetingId }: EditorWorkspacePro
         channel.close();
       }
     } catch (e) {}
-  }, [previewHtml, previewCss, previewJs, assetsMap, files, activeFile]);
+  }, [previewHtml, previewCss, previewJs, assetsMap, files, activeFile, activeFolderId, folderName, activeProject]);
+
+  // Go Live: Immediately write latest payload to localStorage & open /preview tab with active folder ID
+  const handleGoLive = useCallback(() => {
+    try {
+      const htmlFilesMap: { [name: string]: string } = {};
+      files.forEach(f => {
+        if (f.language === 'html' || f.name.endsWith('.html')) {
+          htmlFilesMap[f.name] = f.content;
+        }
+      });
+
+      const payload = {
+        html: previewHtml,
+        css: previewCss,
+        js: previewJs,
+        assets: assetsMap,
+        htmlFiles: htmlFilesMap,
+        currentFile: activeFile?.name || 'index.html',
+        projectId: activeFolderId,
+        projectName: folderName || activeProject?.name || 'My Project',
+        timestamp: Date.now(),
+      };
+
+      localStorage.setItem('kodelab_preview_payload', JSON.stringify(payload));
+      if (typeof BroadcastChannel !== 'undefined') {
+        const channel = new BroadcastChannel('kodelab_live_preview');
+        channel.postMessage(payload);
+        channel.close();
+      }
+    } catch (e) {
+      console.error('Failed to broadcast preview payload', e);
+    }
+
+    const targetUrl = activeFolderId ? `/preview?project=${activeFolderId}` : '/preview';
+    window.open(targetUrl, 'kodelab_live_preview_tab');
+  }, [files, previewHtml, previewCss, previewJs, assetsMap, activeFile, activeFolderId, folderName, activeProject]);
 
   // Navigate to local HTML file when clicking relative <a href="lain.html"> links in live preview
   const handleNavigateFile = useCallback((fileName: string) => {
@@ -925,7 +963,7 @@ export default function EditorWorkspace({ initialMeetingId }: EditorWorkspacePro
                 <div className="flex items-center gap-1.5">
                   {/* Go Live (New Tab Live Sync Preview) */}
                   <button
-                    onClick={() => window.open('/preview', 'kodelab_live_preview_tab')}
+                    onClick={handleGoLive}
                     className="flex items-center gap-1.5 px-3 h-8 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 rounded-lg text-xs font-bold transition-colors"
                     title="Go Live (Open Auto-Sync Preview in New Tab)"
                   >
@@ -1130,7 +1168,7 @@ export default function EditorWorkspace({ initialMeetingId }: EditorWorkspacePro
                     setShowSidePreview(false);
                     setMobileTab('editor');
                   }}
-                  onGoLive={() => window.open('/preview', 'kodelab_live_preview_tab')}
+                  onGoLive={handleGoLive}
                 />
               </div>
             </>

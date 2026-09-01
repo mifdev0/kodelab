@@ -132,11 +132,37 @@ function LivePreviewContent() {
       const stored = localStorage.getItem('kodelab_preview_payload');
       if (stored) {
         const parsed = JSON.parse(stored);
-        setHtmlCode(parsed.html || '');
-        setCssCode(parsed.css || '');
-        setJsCode(parsed.js || '');
-        setAssets(parsed.assets || {});
+        if (parsed.projectId) {
+          const proj = store.getUserProject(parsed.projectId);
+          if (proj) setProject(proj);
+        }
+        if (parsed.html !== undefined) setHtmlCode(parsed.html || '');
+        if (parsed.css !== undefined) setCssCode(parsed.css || '');
+        if (parsed.js !== undefined) setJsCode(parsed.js || '');
+        if (parsed.assets) setAssets(parsed.assets || {});
         if (parsed.htmlFiles) setHtmlFiles(parsed.htmlFiles);
+      } else {
+        // Fallback: If no preview payload in localStorage, load user's most recent project
+        const userProjects = store.getUserProjects();
+        if (userProjects && userProjects.length > 0) {
+          const defaultProj = userProjects[0];
+          setProject(defaultProj);
+          const files = defaultProj.files || [];
+          const htmlMap: { [name: string]: string } = {};
+          let indexContent = '';
+          files.forEach(f => {
+            if (f.language === 'html' || f.name.endsWith('.html')) {
+              htmlMap[f.name] = f.content;
+              if (f.name.toLowerCase() === 'index.html' || !indexContent) {
+                indexContent = f.content;
+              }
+            }
+          });
+          setHtmlFiles(htmlMap);
+          setHtmlCode(indexContent);
+          setCssCode(files.filter(f => f.language === 'css' || f.name.endsWith('.css')).map(f => f.content).join('\n\n'));
+          setJsCode(files.filter(f => f.language === 'js' || f.name.endsWith('.js')).map(f => f.content).join('\n\n'));
+        }
       }
     } catch (e) {
       console.error('Failed to load initial preview payload', e);
@@ -148,15 +174,15 @@ function LivePreviewContent() {
       channel = new BroadcastChannel('kodelab_live_preview');
       channel.onmessage = (event) => {
         if (event.data) {
-          setHtmlCode(event.data.html || '');
-          setCssCode(event.data.css || '');
-          setJsCode(event.data.js || '');
-          if (event.data.assets) {
-            setAssets(event.data.assets);
+          if (event.data.projectId) {
+            const proj = store.getUserProject(event.data.projectId);
+            if (proj) setProject(proj);
           }
-          if (event.data.htmlFiles) {
-            setHtmlFiles(event.data.htmlFiles);
-          }
+          if (event.data.html !== undefined) setHtmlCode(event.data.html || '');
+          if (event.data.css !== undefined) setCssCode(event.data.css || '');
+          if (event.data.js !== undefined) setJsCode(event.data.js || '');
+          if (event.data.assets) setAssets(event.data.assets);
+          if (event.data.htmlFiles) setHtmlFiles(event.data.htmlFiles);
         }
       };
     } catch (e) {
@@ -168,10 +194,14 @@ function LivePreviewContent() {
       if (e.key === 'kodelab_preview_payload' && e.newValue) {
         try {
           const parsed = JSON.parse(e.newValue);
-          setHtmlCode(parsed.html || '');
-          setCssCode(parsed.css || '');
-          setJsCode(parsed.js || '');
-          setAssets(parsed.assets || {});
+          if (parsed.projectId) {
+            const proj = store.getUserProject(parsed.projectId);
+            if (proj) setProject(proj);
+          }
+          if (parsed.html !== undefined) setHtmlCode(parsed.html || '');
+          if (parsed.css !== undefined) setCssCode(parsed.css || '');
+          if (parsed.js !== undefined) setJsCode(parsed.js || '');
+          if (parsed.assets) setAssets(parsed.assets || {});
           if (parsed.htmlFiles) setHtmlFiles(parsed.htmlFiles);
         } catch (err) {}
       }
