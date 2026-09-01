@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo, Suspense } from 'react';
+import React, { useState, useEffect, useMemo, Suspense, useCallback } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { store } from '@/lib/store';
@@ -16,7 +16,10 @@ import {
   Code2,
   Globe,
   Terminal,
-  Laptop
+  Laptop,
+  RefreshCw,
+  Sparkles,
+  Users
 } from 'lucide-react';
 import { useTheme } from '@/lib/theme-context';
 
@@ -30,6 +33,8 @@ function ParentShowcaseContent() {
   const [projects, setProjects] = useState<UserProject[]>([]);
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [students, setStudents] = useState<Profile[]>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isSyncing, setIsSyncing] = useState<boolean>(false);
   
   // Selected Session (null = List of Sessions; string = Specific Session Student List)
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(initialSessionParam);
@@ -42,25 +47,10 @@ function ParentShowcaseContent() {
   const [inspectingProject, setInspectingProject] = useState<UserProject | null>(null);
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
 
-  useEffect(() => {
-    loadData();
-    store.syncWithSupabase().then(() => {
-      loadData();
-    }).catch(() => {});
-
-    // Instant Realtime Subscription
-    const unsubscribe = store.subscribeRealtime(() => {
-      loadData();
-    });
-
-    return () => unsubscribe();
-  }, []);
-
-  const loadData = () => {
+  const loadData = useCallback(() => {
     const allProjects = store.getUserProjects();
-    const sessionStudentProjects = allProjects.filter(
-      p => Boolean(p.meeting_id) && (p.student?.role === 'student' || p.student_id !== 'teacher-1')
-    );
+    // Show all projects that belong to a class session
+    const sessionStudentProjects = allProjects.filter(p => Boolean(p.meeting_id));
     setProjects(sessionStudentProjects);
 
     const rawMeetings = store.getMeetings();
@@ -72,7 +62,32 @@ function ParentShowcaseContent() {
     });
     setMeetings(sortedMeetings);
     setStudents(store.getStudents());
-  };
+  }, []);
+
+  const handleSyncCloud = useCallback(async () => {
+    setIsSyncing(true);
+    try {
+      await store.syncWithSupabase();
+      loadData();
+    } catch (e) {
+      console.warn('Sync failed:', e);
+    } finally {
+      setIsSyncing(false);
+      setIsLoading(false);
+    }
+  }, [loadData]);
+
+  useEffect(() => {
+    loadData();
+    handleSyncCloud();
+
+    // Instant Realtime Subscription
+    const unsubscribe = store.subscribeRealtime(() => {
+      loadData();
+    });
+
+    return () => unsubscribe();
+  }, [loadData, handleSyncCloud]);
 
   const sessionStats = useMemo(() => {
     const map = new Map<string, { count: number; studentNames: string[]; studentClasses: Set<string> }>();
@@ -86,6 +101,8 @@ function ParentShowcaseContent() {
         entry.count += 1;
         if (p.student?.full_name) {
           entry.studentNames.push(p.student.full_name);
+        } else if (p.name) {
+          entry.studentNames.push(p.name);
         }
         if (p.student?.class_name) {
           entry.studentClasses.add(p.student.class_name);
@@ -116,8 +133,8 @@ function ParentShowcaseContent() {
     if (!selectedSessionId) return [];
     return projects.filter(p => {
       if (p.meeting_id !== selectedSessionId) return false;
-      const studentName = p.student?.full_name?.toLowerCase() || '';
-      const projectName = p.name.toLowerCase();
+      const studentName = (p.student?.full_name || p.name || '').toLowerCase();
+      const projectName = (p.name || '').toLowerCase();
       const studentClass = p.student?.class_name || '';
       const query = searchQuery.toLowerCase().trim();
 
@@ -156,12 +173,22 @@ function ParentShowcaseContent() {
               Classroom Showcase
             </span>
             <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold border border-emerald-500/20">
-              Live
+              Live Cloud
             </span>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
+          <button
+            onClick={handleSyncCloud}
+            disabled={isSyncing}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-850 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 transition-all disabled:opacity-50"
+            title="Refresh cloud data"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin text-primary' : ''}`} />
+            <span className="hidden sm:inline">{isSyncing ? 'Syncing...' : 'Sync Cloud'}</span>
+          </button>
+
           <button
             onClick={toggleTheme}
             className="p-2 rounded-xl text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
@@ -191,7 +218,21 @@ function ParentShowcaseContent() {
             </p>
           </div>
 
-          {meetings.length === 0 ? (
+          {isLoading && meetings.length === 0 ? (
+            <div className="bg-white dark:bg-[#12141c] rounded-2xl p-12 text-center border border-slate-200 dark:border-slate-800 space-y-4 shadow-xs">
+              <div className="w-10 h-10 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mx-auto animate-spin">
+                <RefreshCw className="w-5 h-5" />
+              </div>
+              <div className="space-y-1">
+                <div className="text-sm font-bold text-slate-800 dark:text-slate-200">
+                  Loading classroom showcase from cloud database...
+                </div>
+                <div className="text-xs text-slate-400 font-mono">
+                  Fetching class sessions and student works from Supabase.
+                </div>
+              </div>
+            </div>
+          ) : meetings.length === 0 ? (
             <div className="bg-white dark:bg-[#12141c] rounded-2xl p-12 text-center border border-slate-200 dark:border-slate-800 text-xs text-slate-400 font-mono">
               // No class sessions recorded yet.
             </div>

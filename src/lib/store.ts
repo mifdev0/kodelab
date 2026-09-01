@@ -523,8 +523,10 @@ export const store = {
       }
 
       if (dbProfiles && dbProfiles.length > 0) {
-        setStored('profiles', dbProfiles);
-        return dbProfiles;
+        const hasTeacher = dbProfiles.some((p: any) => p.id === 'teacher-1' || p.role === 'teacher');
+        const finalProfiles = hasTeacher ? dbProfiles : [...INITIAL_PROFILES, ...dbProfiles];
+        setStored('profiles', finalProfiles);
+        return finalProfiles;
       }
       return this.getProfiles();
     } catch (e) {
@@ -533,25 +535,38 @@ export const store = {
     }
   },
 
-  async syncWithSupabase(): Promise<void> {
-    if (!supabase) return;
+  async syncWithSupabase(): Promise<{ profiles: Profile[]; meetings: Meeting[]; projects: UserProject[] }> {
+    if (!supabase) {
+      return {
+        profiles: this.getProfiles(),
+        meetings: this.getMeetings(),
+        projects: this.getUserProjects(),
+      };
+    }
     try {
-      // 1. Sync profiles
-      await this.forceSyncProfiles();
+      // Parallel fetch all tables in a single fast round-trip (~150ms)
+      const [profilesRes, meetingsRes, projectsRes] = await Promise.all([
+        supabase.from('profiles').select('*'),
+        supabase.from('meetings').select('*').order('created_at', { ascending: false }),
+        supabase.from('user_projects').select('*, project_files(*)').order('created_at', { ascending: false }),
+      ]);
 
-      // 2. Sync meetings (Supabase is Single Source of Truth, newest first)
-      const { data: dbMeetings, error: mErr } = await supabase.from('meetings').select('*').order('created_at', { ascending: false });
-      if (!mErr && dbMeetings) {
-        setStored('meetings', dbMeetings);
+      let mergedProfiles = this.getProfiles();
+      if (!profilesRes.error && profilesRes.data && profilesRes.data.length > 0) {
+        const hasTeacher = profilesRes.data.some((p: any) => p.id === 'teacher-1' || p.role === 'teacher');
+        mergedProfiles = hasTeacher ? profilesRes.data : [...INITIAL_PROFILES, ...profilesRes.data];
+        setStored('profiles', mergedProfiles);
       }
 
-      // 3. Sync user projects & files (Supabase is Single Source of Truth, newest first)
-      const { data: dbProjects, error: prErr } = await supabase
-        .from('user_projects')
-        .select('*, project_files(*)')
-        .order('created_at', { ascending: false });
-      if (!prErr && dbProjects) {
-        const formatted = dbProjects.map((p: any) => ({
+      let mergedMeetings = this.getMeetings();
+      if (!meetingsRes.error && meetingsRes.data) {
+        mergedMeetings = meetingsRes.data;
+        setStored('meetings', mergedMeetings);
+      }
+
+      let mergedProjects = this.getUserProjects();
+      if (!projectsRes.error && projectsRes.data) {
+        const formatted = projectsRes.data.map((p: any) => ({
           id: p.id,
           student_id: p.student_id,
           meeting_id: p.meeting_id,
@@ -568,10 +583,22 @@ export const store = {
             updated_at: f.updated_at,
           }))
         }));
-        setStored('user_projects', formatted);
+        mergedProjects = formatted;
+        setStored('user_projects', mergedProjects);
       }
+
+      return {
+        profiles: mergedProfiles,
+        meetings: mergedMeetings,
+        projects: mergedProjects,
+      };
     } catch (e) {
       console.warn('Supabase sync notice:', e);
+      return {
+        profiles: this.getProfiles(),
+        meetings: this.getMeetings(),
+        projects: this.getUserProjects(),
+      };
     }
   },
 
@@ -752,7 +779,18 @@ export const store = {
         meeting_id: newProject.meeting_id || null,
         name: newProject.name,
         description: newProject.description,
-      }]).then(() => {});
+      }]).then(() => {
+        if (initialFiles.length > 0) {
+          const filesToInsert = initialFiles.map(f => ({
+            id: f.id,
+            project_id: newProject.id,
+            name: f.name,
+            content: f.content,
+            language: f.language,
+          }));
+          supabase.from('project_files').insert(filesToInsert).then(() => {});
+        }
+      });
     }
 
     return newProject;
