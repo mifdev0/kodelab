@@ -61,7 +61,8 @@ function transformHtmlLinks(rawHtml: string, assets?: { [name: string]: string }
           .replace(/target=(?:"[^"]*"|'[^']*'|[^>\s]+)/i, '')
           .trim();
 
-        return `<a href="${dataUrl}" target="_blank" data-kodelab-file="${matchedKey}" onclick="try{window.parent.postMessage({type:'NAVIGATE_LOCAL_FILE',fileName:'${matchedKey}'},'*');}catch(e){}" ${cleanedAttrs}>`;
+        // Safely open in viewer tab (prevents about:blank#blocked)
+        return `<a href="javascript:void(0)" data-kodelab-file="${matchedKey}" data-kodelab-media="true" onclick="try{window.parent.postMessage({type:'NAVIGATE_LOCAL_FILE',fileName:'${matchedKey}'},'*');window.parent.postMessage({type:'VIEW_IMAGE_TAB',fileName:'${matchedKey}',mediaSrc:'${dataUrl}'},'*');}catch(e){}return false;" ${cleanedAttrs}>`;
       }
     }
 
@@ -269,6 +270,13 @@ function LivePreviewContent() {
         if (matchedKey && htmlFiles[matchedKey] !== undefined) {
           setCurrentHtmlFile(matchedKey);
           setHtmlCode(htmlFiles[matchedKey]);
+        }
+      } else if (event.data.type === 'VIEW_IMAGE_TAB' && event.data.mediaSrc) {
+        const newWin = window.open('', '_blank');
+        if (newWin) {
+          const fileName = event.data.fileName || 'Image Asset';
+          newWin.document.write(`<!DOCTYPE html><html><head><title>${fileName}</title><meta name="viewport" content="width=device-width, initial-scale=1.0"><style>body{margin:0;background:#0f172a;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:16px;box-sizing:border-box;font-family:sans-serif;}img{max-width:95vw;max-height:92vh;object-fit:contain;box-shadow:0 20px 40px rgba(0,0,0,0.6);border-radius:12px;background:repeating-conic-gradient(#1e293b 0% 25%, #0f172a 0% 50%) 50% / 20px 20px;}</style></head><body><img src="${event.data.mediaSrc}" alt="${fileName}"></body></html>`);
+          newWin.document.close();
         }
       } else if (event.data.type === 'OPEN_EXTERNAL_URL' && event.data.url) {
         let url = event.data.url.trim();
