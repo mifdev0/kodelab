@@ -879,7 +879,8 @@ export const store = {
     const ext = newName.split('.').pop()?.toLowerCase();
     let language: EditorTab = 'html';
     if (ext === 'css') language = 'css';
-    if (ext === 'js') language = 'js';
+    else if (ext === 'js') language = 'js';
+    else if (ext && ['png', 'jpg', 'jpeg', 'svg', 'gif', 'webp'].includes(ext)) language = 'image';
 
     projects[projectIndex].files[fileIndex].name = newName;
     projects[projectIndex].files[fileIndex].language = language;

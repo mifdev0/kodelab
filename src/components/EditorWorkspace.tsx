@@ -80,6 +80,7 @@ export default function EditorWorkspace({ initialMeetingId }: EditorWorkspacePro
   const [isOpenFolderModalOpen, setIsOpenFolderModalOpen] = useState(false);
   const [isNewFileModalOpen, setIsNewFileModalOpen] = useState(false);
   const [newFileNameInput, setNewFileNameInput] = useState('');
+  const [targetFileSubfolder, setTargetFileSubfolder] = useState(''); // "" for root
   const [isNewFolderModalOpen, setIsNewFolderModalOpen] = useState(false);
   const [newFolderNameInput, setNewFolderNameInput] = useState('');
   const [newFolderSessionId, setNewFolderSessionId] = useState('');
@@ -87,6 +88,18 @@ export default function EditorWorkspace({ initialMeetingId }: EditorWorkspacePro
   const [meetings, setMeetings] = useState<any[]>([]);
   const [isRenameFileModalOpen, setIsRenameFileModalOpen] = useState(false);
   const [fileToRename, setFileToRename] = useState<ProjectFile | null>(null);
+
+  // Subfolders (directories) inside active project
+  const [customSubfolders, setCustomSubfolders] = useState<string[]>([]);
+  const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(new Set());
+  const [isNewSubfolderModalOpen, setIsNewSubfolderModalOpen] = useState(false);
+  const [newSubfolderNameInput, setNewSubfolderNameInput] = useState('');
+  const [targetParentSubfolder, setTargetParentSubfolder] = useState('');
+  const [uploadTargetSubfolder, setUploadTargetSubfolder] = useState('');
+  const [isRenameSubfolderModalOpen, setIsRenameSubfolderModalOpen] = useState(false);
+  const [subfolderToRename, setSubfolderToRename] = useState<string | null>(null);
+  const [renamedSubfolderNameInput, setRenamedSubfolderNameInput] = useState('');
+
   // Custom Confirmation / Alert Dialog Modal
   const [confirmDialog, setConfirmDialog] = useState<{
     isOpen: boolean;
@@ -189,6 +202,32 @@ export default function EditorWorkspace({ initialMeetingId }: EditorWorkspacePro
     }
   };
 
+  // Load subfolders when opening project
+  const loadProjectSubfolders = useCallback((project: UserProject) => {
+    try {
+      const saved = localStorage.getItem(`kodelab_subfolders_${project.id}`);
+      const savedFolders: string[] = saved ? JSON.parse(saved) : [];
+      
+      const fileFolders: string[] = [];
+      (project.files || []).forEach(f => {
+        if (f.name.includes('/')) {
+          const parts = f.name.split('/');
+          parts.pop();
+          let curr = '';
+          parts.forEach(p => {
+            curr = curr ? `${curr}/${p}` : p;
+            fileFolders.push(curr);
+          });
+        }
+      });
+
+      const allUnique = Array.from(new Set([...savedFolders, ...fileFolders]));
+      setCustomSubfolders(allUnique);
+    } catch (e) {
+      setCustomSubfolders([]);
+    }
+  }, []);
+
   // Open a Folder
   const openCustomProjectFolder = (project: UserProject) => {
     // Anti-Cheating Protection: Students cannot open other students' source code
@@ -200,6 +239,7 @@ export default function EditorWorkspace({ initialMeetingId }: EditorWorkspacePro
     setFolderName(project.name);
     setFiles(project.files || []);
     setActiveFileId(project.files && project.files.length > 0 ? project.files[0].id : null);
+    loadProjectSubfolders(project);
     setSaveStatus('saved');
     setIsOpenFolderModalOpen(false);
   };
@@ -209,12 +249,16 @@ export default function EditorWorkspace({ initialMeetingId }: EditorWorkspacePro
     return files.find(f => f.id === activeFileId) || files[0] || null;
   }, [files, activeFileId]);
 
-  // Assets dictionary (images) mapping file names to base64 Data URLs
+  // Assets dictionary (images) mapping file names & paths to base64 Data URLs
   const assetsMap = useMemo(() => {
     const map: { [name: string]: string } = {};
     files.forEach(f => {
       if (f.language === 'image' || f.name.match(/\.(png|jpg|jpeg|svg|gif|webp)$/i)) {
         map[f.name] = f.content;
+        const baseName = f.name.split('/').pop();
+        if (baseName && baseName !== f.name) {
+          map[baseName] = f.content;
+        }
       }
     });
     return map;
@@ -228,7 +272,7 @@ export default function EditorWorkspace({ initialMeetingId }: EditorWorkspacePro
     if (activeFile && activeFile.language === 'html') {
       mainHtml = activeFile.content;
     } else {
-      const indexFile = files.find(f => f.name.toLowerCase() === 'index.html');
+      const indexFile = files.find(f => f.name.toLowerCase() === 'index.html' || f.name.toLowerCase().endsWith('/index.html'));
       const anyHtml = files.find(f => f.language === 'html');
       mainHtml = indexFile ? indexFile.content : anyHtml ? anyHtml.content : '';
     }
@@ -284,17 +328,139 @@ export default function EditorWorkspace({ initialMeetingId }: EditorWorkspacePro
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [activeFolderId, activeFile, isReadOnly]);
 
-  // Add File in Folder
+  // Toggle folder collapse state
+  const toggleFolderCollapse = (folderPath: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setCollapsedFolders(prev => {
+      const next = new Set(prev);
+      if (next.has(folderPath)) {
+        next.delete(folderPath);
+      } else {
+        next.add(folderPath);
+      }
+      return next;
+    });
+  };
+
+  // Create Subfolder inside project
+  const handleCreateSubfolder = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newSubfolderNameInput.trim() || !activeFolderId || isReadOnly) return;
+
+    const cleanName = newSubfolderNameInput.trim().replace(/^\/+|\/+$/g, '');
+    const fullPath = targetParentSubfolder ? `${targetParentSubfolder}/${cleanName}` : cleanName;
+
+    const updated = Array.from(new Set([...customSubfolders, fullPath]));
+    setCustomSubfolders(updated);
+    try {
+      localStorage.setItem(`kodelab_subfolders_${activeFolderId}`, JSON.stringify(updated));
+    } catch (err) {}
+
+    // Ensure expanded
+    setCollapsedFolders(prev => {
+      const next = new Set(prev);
+      if (targetParentSubfolder) next.delete(targetParentSubfolder);
+      next.delete(fullPath);
+      return next;
+    });
+
+    setIsNewSubfolderModalOpen(false);
+    setNewSubfolderNameInput('');
+    setTargetParentSubfolder('');
+  };
+
+  // Delete Subfolder & its contents
+  const handleDeleteSubfolder = (folderPath: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    if (isReadOnly || !activeFolderId) return;
+
+    const filesToDelete = files.filter(f => f.name.startsWith(`${folderPath}/`));
+
+    setConfirmDialog({
+      isOpen: true,
+      title: 'Hapus Folder',
+      message: `Hapus folder "${folderPath}" beserta ${filesToDelete.length} file di dalamnya? Tindakan ini tidak bisa dibatalkan.`,
+      confirmText: 'Hapus Folder',
+      confirmVariant: 'danger',
+      showCancel: true,
+      onConfirm: () => {
+        filesToDelete.forEach(f => {
+          store.deleteProjectFile(activeFolderId, f.id);
+        });
+
+        const remaining = files.filter(f => !f.name.startsWith(`${folderPath}/`));
+        setFiles(remaining);
+        if (activeFileId && filesToDelete.some(f => f.id === activeFileId)) {
+          setActiveFileId(remaining.length > 0 ? remaining[0].id : null);
+        }
+
+        const updatedFolders = customSubfolders.filter(p => p !== folderPath && !p.startsWith(`${folderPath}/`));
+        setCustomSubfolders(updatedFolders);
+        try {
+          localStorage.setItem(`kodelab_subfolders_${activeFolderId}`, JSON.stringify(updatedFolders));
+        } catch (err) {}
+
+        setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+      },
+    });
+  };
+
+  // Rename Subfolder
+  const handleRenameSubfolderSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!subfolderToRename || !renamedSubfolderNameInput.trim() || !activeFolderId || isReadOnly) return;
+
+    const cleanNewName = renamedSubfolderNameInput.trim().replace(/^\/+|\/+$/g, '');
+    const parentPath = subfolderToRename.includes('/') ? subfolderToRename.substring(0, subfolderToRename.lastIndexOf('/')) : '';
+    const newFullPath = parentPath ? `${parentPath}/${cleanNewName}` : cleanNewName;
+
+    if (newFullPath === subfolderToRename) {
+      setIsRenameSubfolderModalOpen(false);
+      return;
+    }
+
+    const prefix = `${subfolderToRename}/`;
+    const updatedFiles = files.map(f => {
+      if (f.name.startsWith(prefix)) {
+        const remainder = f.name.substring(prefix.length);
+        const newFileName = `${newFullPath}/${remainder}`;
+        store.renameProjectFile(activeFolderId, f.id, newFileName);
+        return { ...f, name: newFileName };
+      }
+      return f;
+    });
+    setFiles(updatedFiles);
+
+    const updatedSubfolders = customSubfolders.map(p => {
+      if (p === subfolderToRename) return newFullPath;
+      if (p.startsWith(prefix)) {
+        return `${newFullPath}/${p.substring(prefix.length)}`;
+      }
+      return p;
+    });
+    setCustomSubfolders(updatedSubfolders);
+    try {
+      localStorage.setItem(`kodelab_subfolders_${activeFolderId}`, JSON.stringify(updatedSubfolders));
+    } catch (err) {}
+
+    setIsRenameSubfolderModalOpen(false);
+    setSubfolderToRename(null);
+    setRenamedSubfolderNameInput('');
+  };
+
+  // Add File in Folder (supports subfolder target)
   const handleAddNewFile = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newFileNameInput.trim() || !activeFolderId || isReadOnly) return;
 
-    let cleanName = newFileNameInput.trim();
+    let cleanName = newFileNameInput.trim().replace(/^\/+/, '');
     if (!cleanName.includes('.')) {
       cleanName = `${cleanName}.html`;
     }
 
-    const addedFile = store.addProjectFile(activeFolderId, cleanName, '');
+    const fullFileName = targetFileSubfolder ? `${targetFileSubfolder}/${cleanName}` : cleanName;
+
+    const addedFile = store.addProjectFile(activeFolderId, fullFileName, '');
     if (addedFile) {
       setFiles(prev => {
         const existingIdx = prev.findIndex(f => f.id === addedFile.id || f.name === addedFile.name);
@@ -306,20 +472,31 @@ export default function EditorWorkspace({ initialMeetingId }: EditorWorkspacePro
         return [...prev, addedFile];
       });
       setActiveFileId(addedFile.id);
+
+      if (targetFileSubfolder) {
+        setCollapsedFolders(prev => {
+          const next = new Set(prev);
+          next.delete(targetFileSubfolder);
+          return next;
+        });
+      }
     }
 
     setIsNewFileModalOpen(false);
     setNewFileNameInput('');
+    setTargetFileSubfolder('');
   };
 
-  // Upload Local Files (Images & Code)
+  // Upload Local Files (Images & Code into target subfolder)
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFiles = e.target.files;
     if (!selectedFiles || selectedFiles.length === 0 || !activeFolderId || isReadOnly) return;
 
+    const targetDir = uploadTargetSubfolder ? `${uploadTargetSubfolder}/` : '';
+
     Array.from(selectedFiles).forEach(file => {
-      const fileName = file.name;
-      const ext = fileName.split('.').pop()?.toLowerCase();
+      const fullFileName = `${targetDir}${file.name}`;
+      const ext = file.name.split('.').pop()?.toLowerCase();
       const isImage = file.type.startsWith('image/') || (ext && ['png', 'jpg', 'jpeg', 'svg', 'gif', 'webp'].includes(ext));
 
       const reader = new FileReader();
@@ -327,10 +504,10 @@ export default function EditorWorkspace({ initialMeetingId }: EditorWorkspacePro
       if (isImage) {
         reader.onload = (event) => {
           const dataUrl = event.target?.result as string;
-          const addedFile = store.addProjectFile(activeFolderId, fileName, dataUrl);
+          const addedFile = store.addProjectFile(activeFolderId, fullFileName, dataUrl);
           if (addedFile) {
             setFiles(prev => {
-              const existsIdx = prev.findIndex(f => f.id === addedFile.id || f.name === fileName);
+              const existsIdx = prev.findIndex(f => f.id === addedFile.id || f.name === fullFileName);
               if (existsIdx >= 0) {
                 const updated = [...prev];
                 updated[existsIdx] = addedFile;
@@ -345,10 +522,10 @@ export default function EditorWorkspace({ initialMeetingId }: EditorWorkspacePro
       } else {
         reader.onload = (event) => {
           const textContent = event.target?.result as string;
-          const addedFile = store.addProjectFile(activeFolderId, fileName, textContent);
+          const addedFile = store.addProjectFile(activeFolderId, fullFileName, textContent);
           if (addedFile) {
             setFiles(prev => {
-              const existsIdx = prev.findIndex(f => f.id === addedFile.id || f.name === fileName);
+              const existsIdx = prev.findIndex(f => f.id === addedFile.id || f.name === fullFileName);
               if (existsIdx >= 0) {
                 const updated = [...prev];
                 updated[existsIdx] = addedFile;
@@ -363,10 +540,10 @@ export default function EditorWorkspace({ initialMeetingId }: EditorWorkspacePro
       }
     });
 
-    // Reset input value
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
+    setUploadTargetSubfolder('');
   };
 
   // Delete File
@@ -396,24 +573,27 @@ export default function EditorWorkspace({ initialMeetingId }: EditorWorkspacePro
     });
   };
 
-  // Rename File
+  // Rename File (preserves directory path)
   const handleRenameFileSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!fileToRename || !renamedName.trim() || !activeFolderId || isReadOnly) return;
 
-    const newName = renamedName.trim();
-    const ext = newName.split('.').pop()?.toLowerCase();
+    const rawNewName = renamedName.trim().replace(/^\/+/, '');
+    const parentDir = fileToRename.name.includes('/') ? fileToRename.name.substring(0, fileToRename.name.lastIndexOf('/')) : '';
+    const newFullPath = parentDir && !rawNewName.includes('/') ? `${parentDir}/${rawNewName}` : rawNewName;
+
+    const ext = newFullPath.split('.').pop()?.toLowerCase();
     let language: EditorTab = 'html';
     if (ext === 'css') language = 'css';
     else if (ext === 'js') language = 'js';
     else if (ext && ['png', 'jpg', 'jpeg', 'svg', 'gif', 'webp'].includes(ext)) language = 'image';
 
     const updated = files.map(f =>
-      f.id === fileToRename.id ? { ...f, name: newName, language } : f
+      f.id === fileToRename.id ? { ...f, name: newFullPath, language } : f
     );
     setFiles(updated);
 
-    store.renameProjectFile(activeFolderId, fileToRename.id, newName);
+    store.renameProjectFile(activeFolderId, fileToRename.id, newFullPath);
 
     setIsRenameFileModalOpen(false);
     setFileToRename(null);
@@ -612,6 +792,226 @@ export default function EditorWorkspace({ initialMeetingId }: EditorWorkspacePro
     }
   };
 
+  interface TreeFolderNode {
+    type: 'folder';
+    name: string;
+    fullPath: string;
+    subfolders: TreeFolderNode[];
+    files: ProjectFile[];
+  }
+
+  // Compute hierarchical tree from files + customSubfolders
+  const fileTree: TreeFolderNode = useMemo(() => {
+    const allFolderPaths = new Set<string>(customSubfolders);
+    files.forEach(f => {
+      if (f.name.includes('/')) {
+        const parts = f.name.split('/');
+        parts.pop();
+        let curr = '';
+        parts.forEach(p => {
+          curr = curr ? `${curr}/${p}` : p;
+          allFolderPaths.add(curr);
+        });
+      }
+    });
+
+    const buildFolderNode = (folderPath: string): TreeFolderNode => {
+      const folderName = folderPath.split('/').pop() || folderPath;
+      const prefix = folderPath ? `${folderPath}/` : '';
+      
+      const childFolderPaths = Array.from(allFolderPaths).filter(p => {
+        if (!p.startsWith(prefix)) return false;
+        const remainder = p.substring(prefix.length);
+        return remainder.length > 0 && !remainder.includes('/');
+      }).sort((a, b) => a.localeCompare(b));
+
+      const subfolders = childFolderPaths.map(buildFolderNode);
+
+      const childFiles = files.filter(f => {
+        if (folderPath === '') {
+          return !f.name.includes('/');
+        }
+        if (!f.name.startsWith(prefix)) return false;
+        const remainder = f.name.substring(prefix.length);
+        return !remainder.includes('/');
+      }).sort((a, b) => {
+        const order: { [k: string]: number } = { html: 1, css: 2, js: 3, image: 4, other: 5 };
+        const oA = order[a.language] || 5;
+        const oB = order[b.language] || 5;
+        if (oA !== oB) return oA - oB;
+        return a.name.localeCompare(b.name);
+      });
+
+      return {
+        type: 'folder',
+        name: folderName,
+        fullPath: folderPath,
+        subfolders,
+        files: childFiles,
+      };
+    };
+
+    return buildFolderNode('');
+  }, [files, customSubfolders]);
+
+  // Recursive Tree Item Renderer for Explorer
+  const renderTreeItem = (node: TreeFolderNode, depth: number = 0) => {
+    return (
+      <div key={node.fullPath || '__root__'} className="space-y-0.5">
+        {/* Render subfolders */}
+        {node.subfolders.map(subNode => {
+          const isCollapsed = collapsedFolders.has(subNode.fullPath);
+
+          return (
+            <div key={subNode.fullPath} className="space-y-0.5">
+              {/* Folder Row */}
+              <div
+                onClick={() => toggleFolderCollapse(subNode.fullPath)}
+                className="flex items-center justify-between px-2 py-1 rounded-lg hover:bg-surface-container dark:hover:bg-gray-800/80 cursor-pointer font-bold text-xs text-on-surface dark:text-gray-200 group select-none transition-colors"
+                style={{ paddingLeft: `${Math.max(8, depth * 12 + 8)}px` }}
+              >
+                <div className="flex items-center gap-1.5 truncate">
+                  {isCollapsed ? (
+                    <ChevronRight className="w-3.5 h-3.5 text-on-surface-variant/70 dark:text-gray-500 shrink-0" />
+                  ) : (
+                    <ChevronDown className="w-3.5 h-3.5 text-on-surface-variant/70 dark:text-gray-500 shrink-0" />
+                  )}
+                  {isCollapsed ? (
+                    <Folder className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                  ) : (
+                    <FolderOpen className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                  )}
+                  <span className="truncate font-semibold text-xs">{subNode.name}</span>
+                </div>
+
+                {/* Folder Hover Quick Actions */}
+                {!isReadOnly && (
+                  <div className="hidden group-hover:flex items-center gap-0.5 shrink-0">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setTargetFileSubfolder(subNode.fullPath);
+                        setIsNewFileModalOpen(true);
+                      }}
+                      className="p-1 hover:bg-surface-container-high dark:hover:bg-gray-700 rounded text-on-surface-variant hover:text-primary transition-colors"
+                      title="New File in this folder"
+                    >
+                      <FilePlus className="w-3 h-3" />
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setTargetParentSubfolder(subNode.fullPath);
+                        setIsNewSubfolderModalOpen(true);
+                      }}
+                      className="p-1 hover:bg-surface-container-high dark:hover:bg-gray-700 rounded text-on-surface-variant hover:text-primary transition-colors"
+                      title="New Subfolder in this folder"
+                    >
+                      <FolderPlus className="w-3 h-3" />
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setUploadTargetSubfolder(subNode.fullPath);
+                        fileInputRef.current?.click();
+                      }}
+                      className="p-1 hover:bg-surface-container-high dark:hover:bg-gray-700 rounded text-on-surface-variant hover:text-primary transition-colors"
+                      title="Upload file into this folder"
+                    >
+                      <Upload className="w-3 h-3" />
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSubfolderToRename(subNode.fullPath);
+                        setRenamedSubfolderNameInput(subNode.name);
+                        setIsRenameSubfolderModalOpen(true);
+                      }}
+                      className="p-1 hover:bg-surface-container-high dark:hover:bg-gray-700 rounded text-on-surface-variant hover:text-primary transition-colors"
+                      title="Rename folder"
+                    >
+                      <Edit3 className="w-3 h-3" />
+                    </button>
+                    <button
+                      onClick={(e) => handleDeleteSubfolder(subNode.fullPath, e)}
+                      className="p-1 hover:bg-surface-container-high dark:hover:bg-gray-700 rounded text-on-surface-variant hover:text-error dark:hover:text-red-400 transition-colors"
+                      title="Delete folder"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Recursive Child Contents if Expanded */}
+              {!isCollapsed && renderTreeItem(subNode, depth + 1)}
+            </div>
+          );
+        })}
+
+        {/* Render files in this node */}
+        {node.files.map(file => {
+          const isActive = file.id === activeFile?.id;
+          const isHtml = file.language === 'html';
+          const isCss = file.language === 'css';
+          const isJs = file.language === 'js';
+          const displayName = file.name.split('/').pop() || file.name;
+
+          return (
+            <div
+              key={file.id}
+              onClick={() => setActiveFileId(file.id)}
+              className={`flex items-center justify-between px-2 py-1 rounded-lg text-xs font-mono cursor-pointer group transition-colors select-none ${
+                isActive
+                  ? 'bg-primary/10 dark:bg-primary/20 text-primary font-bold shadow-xs'
+                  : 'text-on-surface-variant dark:text-gray-300 hover:bg-surface-container dark:hover:bg-gray-800 hover:text-on-surface dark:hover:text-white'
+              }`}
+              style={{ paddingLeft: `${Math.max(10, depth * 12 + 10)}px` }}
+              title={file.name}
+            >
+              <div className="flex items-center gap-2 truncate">
+                <span className={`text-[10px] font-bold px-1 rounded shrink-0 ${
+                  isHtml ? 'text-primary bg-primary/10 dark:bg-primary/25' :
+                  isCss ? 'text-[#264de4] dark:text-[#60a5fa] bg-[#264de4]/10 dark:bg-[#60a5fa]/20' :
+                  isJs ? 'text-[#d97706] dark:text-[#fbbf24] bg-[#f59e0b]/15 dark:bg-[#fbbf24]/20' :
+                  'text-emerald-600 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-950/50'
+                }`}>
+                  {isHtml ? '</>' : isCss ? '#' : isJs ? 'JS' : '🖼️'}
+                </span>
+                <span className="truncate">{displayName}</span>
+              </div>
+
+              {/* Hover actions: Rename & Delete */}
+              {!isReadOnly && (
+                <div className="hidden group-hover:flex items-center gap-1 shrink-0">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setFileToRename(file);
+                      setRenamedName(displayName);
+                      setIsRenameFileModalOpen(true);
+                    }}
+                    className="p-0.5 hover:text-primary rounded"
+                    title="Rename"
+                  >
+                    <Edit3 className="w-3 h-3" />
+                  </button>
+                  <button
+                    onClick={(e) => handleDeleteFile(file.id, e)}
+                    className="p-0.5 hover:text-error dark:hover:text-red-400 rounded"
+                    title="Delete File"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                  </button>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
   return (
     <div className="min-h-screen bg-background dark:bg-[#121418] text-on-surface dark:text-gray-100 select-none transition-colors">
       {/* Hidden File Upload Input */}
@@ -668,14 +1068,30 @@ export default function EditorWorkspace({ initialMeetingId }: EditorWorkspacePro
                       {!isReadOnly && (
                         <>
                           <button
-                            onClick={() => setIsNewFileModalOpen(true)}
+                            onClick={() => {
+                              setTargetFileSubfolder('');
+                              setIsNewFileModalOpen(true);
+                            }}
                             className="p-1 hover:bg-surface-container dark:hover:bg-gray-800 rounded text-on-surface-variant dark:text-gray-400 hover:text-primary transition-colors"
                             title="New File"
                           >
                             <FilePlus className="w-3.5 h-3.5" />
                           </button>
                           <button
-                            onClick={() => fileInputRef.current?.click()}
+                            onClick={() => {
+                              setTargetParentSubfolder('');
+                              setIsNewSubfolderModalOpen(true);
+                            }}
+                            className="p-1 hover:bg-surface-container dark:hover:bg-gray-800 rounded text-on-surface-variant dark:text-gray-400 hover:text-primary transition-colors"
+                            title="New Folder"
+                          >
+                            <FolderPlus className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => {
+                              setUploadTargetSubfolder('');
+                              fileInputRef.current?.click();
+                            }}
                             className="p-1 hover:bg-surface-container dark:hover:bg-gray-800 rounded text-on-surface-variant dark:text-gray-400 hover:text-primary transition-colors"
                             title="Upload File / Image from Device"
                           >
@@ -723,7 +1139,7 @@ export default function EditorWorkspace({ initialMeetingId }: EditorWorkspacePro
                             className="w-full py-2 bg-primary text-white text-xs font-bold rounded-xl hover:bg-primary-hover shadow-xs transition-colors flex items-center justify-center gap-1.5"
                           >
                             <FolderPlus className="w-3.5 h-3.5" />
-                            <span>+ New Folder</span>
+                            <span>+ New Project Folder</span>
                           </button>
                         )}
                         {customProjects.length > 0 && (
@@ -739,10 +1155,10 @@ export default function EditorWorkspace({ initialMeetingId }: EditorWorkspacePro
                     </div>
                   ) : (
                     <div className="space-y-1">
-                      {/* Folder Title Accordion */}
+                      {/* Project Root Accordion Header */}
                       <div
                         onClick={() => setIsFolderTreeOpen(!isFolderTreeOpen)}
-                        className="flex items-center justify-between px-2 py-1.5 rounded-lg hover:bg-surface-container dark:hover:bg-gray-800/80 cursor-pointer font-bold text-xs text-on-surface dark:text-gray-200 group"
+                        className="flex items-center justify-between px-2 py-1.5 rounded-lg hover:bg-surface-container dark:hover:bg-gray-800/80 cursor-pointer font-bold text-xs text-on-surface dark:text-gray-200 group transition-colors"
                       >
                         <div className="flex items-center gap-1.5 truncate">
                           {isFolderTreeOpen ? (
@@ -753,84 +1169,84 @@ export default function EditorWorkspace({ initialMeetingId }: EditorWorkspacePro
                           <Folder className="w-4 h-4 text-primary shrink-0" />
                           <span className="truncate">{folderName}</span>
                         </div>
+
+                        {/* Root Hover Actions */}
+                        {!isReadOnly && (
+                          <div className="hidden group-hover:flex items-center gap-0.5 shrink-0">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setTargetFileSubfolder('');
+                                setIsNewFileModalOpen(true);
+                              }}
+                              className="p-1 hover:bg-surface-container-high dark:hover:bg-gray-700 rounded text-on-surface-variant hover:text-primary transition-colors"
+                              title="New File in Root"
+                            >
+                              <FilePlus className="w-3 h-3" />
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setTargetParentSubfolder('');
+                                setIsNewSubfolderModalOpen(true);
+                              }}
+                              className="p-1 hover:bg-surface-container-high dark:hover:bg-gray-700 rounded text-on-surface-variant hover:text-primary transition-colors"
+                              title="New Folder in Root"
+                            >
+                              <FolderPlus className="w-3 h-3" />
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setUploadTargetSubfolder('');
+                                fileInputRef.current?.click();
+                              }}
+                              className="p-1 hover:bg-surface-container-high dark:hover:bg-gray-700 rounded text-on-surface-variant hover:text-primary transition-colors"
+                              title="Upload to Root"
+                            >
+                              <Upload className="w-3 h-3" />
+                            </button>
+                          </div>
+                        )}
                       </div>
 
-                      {/* Files in Folder */}
+                      {/* Nested Tree Body */}
                       {isFolderTreeOpen && (
-                        <div className="pl-4 space-y-0.5">
-                          {files.map((file) => {
-                            const isActive = file.id === activeFile?.id;
-                            const isHtml = file.language === 'html';
-                            const isCss = file.language === 'css';
-                            const isJs = file.language === 'js';
-                            const isImage = file.language === 'image';
+                        <div className="pl-1.5 space-y-0.5">
+                          {renderTreeItem(fileTree, 0)}
 
-                            return (
-                              <div
-                                key={file.id}
-                                onClick={() => setActiveFileId(file.id)}
-                                className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-mono cursor-pointer group transition-colors ${
-                                  isActive
-                                    ? 'bg-primary/10 dark:bg-primary/20 text-primary font-bold shadow-xs'
-                                    : 'text-on-surface-variant dark:text-gray-300 hover:bg-surface-container dark:hover:bg-gray-800 hover:text-on-surface dark:hover:text-white'
-                                }`}
-                              >
-                                <div className="flex items-center gap-2 truncate">
-                                  <span className={`text-[11px] font-bold px-1 rounded ${
-                                    isHtml ? 'text-primary bg-primary/10 dark:bg-primary/25' :
-                                    isCss ? 'text-[#264de4] dark:text-[#60a5fa] bg-[#264de4]/10 dark:bg-[#60a5fa]/20' :
-                                    isJs ? 'text-[#d97706] dark:text-[#fbbf24] bg-[#f59e0b]/15 dark:bg-[#fbbf24]/20' :
-                                    'text-emerald-600 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-950/50'
-                                  }`}>
-                                    {isHtml ? '</>' : isCss ? '#' : isJs ? 'JS' : '🖼️'}
-                                  </span>
-                                  <span className="truncate">{file.name}</span>
-                                </div>
-
-                                {/* Hover actions: Rename & Delete */}
-                                {!isReadOnly && (
-                                  <div className="hidden group-hover:flex items-center gap-1 shrink-0">
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setFileToRename(file);
-                                        setRenamedName(file.name);
-                                        setIsRenameFileModalOpen(true);
-                                      }}
-                                      className="p-0.5 hover:text-primary rounded"
-                                      title="Rename"
-                                    >
-                                      <Edit3 className="w-3 h-3" />
-                                    </button>
-                                    <button
-                                      onClick={(e) => handleDeleteFile(file.id, e)}
-                                      className="p-0.5 hover:text-error dark:hover:text-red-400 rounded"
-                                      title="Delete File"
-                                    >
-                                      <Trash2 className="w-3 h-3" />
-                                    </button>
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          })}
-
-                          {/* Quick Add & Upload inside Tree */}
+                          {/* Quick Add Bar inside Tree */}
                           {!isReadOnly && (
-                            <div className="pt-1.5 space-y-1">
+                            <div className="pt-2 space-y-1 border-t border-surface-container/40 dark:border-gray-800/60 mt-2">
                               <button
-                                onClick={() => setIsNewFileModalOpen(true)}
+                                onClick={() => {
+                                  setTargetFileSubfolder('');
+                                  setIsNewFileModalOpen(true);
+                                }}
                                 className="w-full text-left px-2 py-1 text-[11px] font-sans font-semibold text-primary hover:bg-primary/5 dark:hover:bg-primary/20 rounded-lg flex items-center gap-1.5 transition-colors"
                               >
                                 <Plus className="w-3 h-3" />
                                 <span>New File...</span>
                               </button>
                               <button
-                                onClick={() => fileInputRef.current?.click()}
+                                onClick={() => {
+                                  setTargetParentSubfolder('');
+                                  setIsNewSubfolderModalOpen(true);
+                                }}
+                                className="w-full text-left px-2 py-1 text-[11px] font-sans font-semibold text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 rounded-lg flex items-center gap-1.5 transition-colors"
+                              >
+                                <FolderPlus className="w-3 h-3" />
+                                <span>New Folder...</span>
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setUploadTargetSubfolder('');
+                                  fileInputRef.current?.click();
+                                }}
                                 className="w-full text-left px-2 py-1 text-[11px] font-sans font-semibold text-on-surface-variant dark:text-gray-400 hover:text-primary dark:hover:text-primary hover:bg-primary/5 dark:hover:bg-gray-800 rounded-lg flex items-center gap-1.5 transition-colors"
                               >
                                 <Upload className="w-3 h-3" />
-                                <span>Upload Image / File</span>
+                                <span>Upload File / Image</span>
                               </button>
                             </div>
                           )}
@@ -854,6 +1270,8 @@ export default function EditorWorkspace({ initialMeetingId }: EditorWorkspacePro
                     const isCss = file.language === 'css';
                     const isJs = file.language === 'js';
                     const isImage = file.language === 'image';
+                    const displayName = file.name.split('/').pop() || file.name;
+                    const parentDir = file.name.includes('/') ? file.name.substring(0, file.name.lastIndexOf('/')) : '';
 
                     return (
                       <div
@@ -873,7 +1291,14 @@ export default function EditorWorkspace({ initialMeetingId }: EditorWorkspacePro
                         }`}>
                           {isHtml ? '</>' : isCss ? '#' : isJs ? 'JS' : '🖼️'}
                         </span>
-                        <span className="font-mono">{file.name}</span>
+                        <span className="font-mono flex items-center">
+                          {parentDir && (
+                            <span className="text-[10px] font-normal text-on-surface-variant/50 mr-0.5">
+                              {parentDir}/
+                            </span>
+                          )}
+                          <span>{displayName}</span>
+                        </span>
 
                         {!isLockedBySession && (
                           <button
@@ -1297,11 +1722,29 @@ export default function EditorWorkspace({ initialMeetingId }: EditorWorkspacePro
                 <input
                   type="text"
                   required
-                  placeholder="about.html / navbar.css / game.js"
+                  placeholder="about.html / style.css / app.js"
                   value={newFileNameInput}
                   onChange={(e) => setNewFileNameInput(e.target.value)}
                   className="w-full px-3.5 py-2.5 bg-surface-container dark:bg-gray-900 rounded-xl border border-outline-variant/40 dark:border-gray-700 text-sm font-mono focus:outline-none focus:border-primary text-on-surface dark:text-gray-100"
                 />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-on-surface-variant dark:text-gray-400 uppercase mb-1.5">
+                  Folder Location
+                </label>
+                <select
+                  value={targetFileSubfolder}
+                  onChange={(e) => setTargetFileSubfolder(e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-surface-container dark:bg-gray-900 rounded-xl border border-outline-variant/40 dark:border-gray-700 text-sm focus:outline-none focus:border-primary text-on-surface dark:text-gray-100 font-medium"
+                >
+                  <option value="">📁 Root / (Top Level)</option>
+                  {customSubfolders.map(sf => (
+                    <option key={sf} value={sf}>
+                      📁 {sf}/
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div className="flex items-center justify-end gap-2 pt-2">
@@ -1317,6 +1760,124 @@ export default function EditorWorkspace({ initialMeetingId }: EditorWorkspacePro
                   className="px-5 py-2 text-sm font-bold bg-primary text-white rounded-xl hover:bg-primary-hover shadow-sm"
                 >
                   Create File
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: New Subfolder inside Project */}
+      {isNewSubfolderModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-surface-container-lowest dark:bg-[#181a1f] rounded-2xl shadow-2xl border border-surface-container dark:border-gray-800 w-full max-w-sm p-6 space-y-4 animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between border-b border-surface-container dark:border-gray-800 pb-3">
+              <div className="flex items-center gap-2">
+                <FolderPlus className="w-5 h-5 text-amber-500" />
+                <h3 className="text-base font-bold text-on-surface dark:text-gray-100">Add New Subfolder</h3>
+              </div>
+              <button
+                onClick={() => setIsNewSubfolderModalOpen(false)}
+                className="text-on-surface-variant dark:text-gray-400 hover:text-on-surface dark:hover:text-white"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateSubfolder} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-on-surface-variant dark:text-gray-400 uppercase mb-1.5">
+                  Subfolder Name
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. assets, css, js, images, pages"
+                  value={newSubfolderNameInput}
+                  onChange={(e) => setNewSubfolderNameInput(e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-surface-container dark:bg-gray-900 rounded-xl border border-outline-variant/40 dark:border-gray-700 text-sm font-mono focus:outline-none focus:border-primary text-on-surface dark:text-gray-100"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-on-surface-variant dark:text-gray-400 uppercase mb-1.5">
+                  Parent Location
+                </label>
+                <select
+                  value={targetParentSubfolder}
+                  onChange={(e) => setTargetParentSubfolder(e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-surface-container dark:bg-gray-900 rounded-xl border border-outline-variant/40 dark:border-gray-700 text-sm focus:outline-none focus:border-primary text-on-surface dark:text-gray-100 font-medium"
+                >
+                  <option value="">📁 Root / (Top Level)</option>
+                  {customSubfolders.map(sf => (
+                    <option key={sf} value={sf}>
+                      📁 {sf}/
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsNewSubfolderModalOpen(false)}
+                  className="px-4 py-2 text-sm font-semibold text-on-surface-variant dark:text-gray-400 hover:bg-surface-container dark:hover:bg-gray-800 rounded-xl"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 text-sm font-bold bg-amber-600 hover:bg-amber-700 text-white rounded-xl shadow-sm"
+                >
+                  Create Folder
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Rename Subfolder */}
+      {isRenameSubfolderModalOpen && subfolderToRename && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-surface-container-lowest dark:bg-[#181a1f] rounded-2xl shadow-2xl border border-surface-container dark:border-gray-800 w-full max-w-sm p-6 space-y-4 animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between border-b border-surface-container dark:border-gray-800 pb-3">
+              <h3 className="text-base font-bold text-on-surface dark:text-gray-100">Rename Subfolder</h3>
+              <button
+                onClick={() => setIsRenameSubfolderModalOpen(false)}
+                className="text-on-surface-variant dark:text-gray-400 hover:text-on-surface dark:hover:text-white"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleRenameSubfolderSubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-on-surface-variant dark:text-gray-400 uppercase mb-1.5">
+                  New Folder Name
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={renamedSubfolderNameInput}
+                  onChange={(e) => setRenamedSubfolderNameInput(e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-surface-container dark:bg-gray-900 rounded-xl border border-outline-variant/40 dark:border-gray-700 text-sm font-mono focus:outline-none focus:border-primary text-on-surface dark:text-gray-100"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsRenameSubfolderModalOpen(false)}
+                  className="px-4 py-2 text-sm font-semibold text-on-surface-variant dark:text-gray-400 hover:bg-surface-container dark:hover:bg-gray-800 rounded-xl"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 text-sm font-bold bg-primary text-white rounded-xl hover:bg-primary-hover shadow-sm"
+                >
+                  Save Name
                 </button>
               </div>
             </form>
