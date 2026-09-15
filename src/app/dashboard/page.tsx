@@ -36,7 +36,8 @@ import {
   Star,
   MessageSquare,
   ExternalLink,
-  X
+  X,
+  RefreshCw
 } from 'lucide-react';
 
 export default function TeacherSessionsDashboard() {
@@ -50,6 +51,12 @@ export default function TeacherSessionsDashboard() {
   const [selectedMeetingId, setSelectedMeetingId] = useState<string>('');
   const [sessionProjects, setSessionProjects] = useState<UserProject[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  const selectedMeetingIdRef = useRef<string>('');
+  useEffect(() => {
+    selectedMeetingIdRef.current = selectedMeetingId;
+  }, [selectedMeetingId]);
 
   const [isNewSessionModalOpen, setIsNewSessionModalOpen] = useState(false);
   const [newSessionTitle, setNewSessionTitle] = useState('');
@@ -83,7 +90,38 @@ export default function TeacherSessionsDashboard() {
     onConfirm: () => {},
   });
 
-  // Initial Load & Realtime Sync
+  const loadData = () => {
+    const list = store.getMeetings();
+    setMeetings(list);
+
+    const currentId = selectedMeetingIdRef.current;
+    const target = (currentId && list.find(m => m.id === currentId)) 
+      || list.find(m => m.is_active) 
+      || list[0];
+
+    if (target) {
+      setSelectedMeetingId(target.id);
+      const projs = store.getProjectsByMeeting(target.id);
+      setSessionProjects(projs);
+    } else {
+      setSelectedMeetingId('');
+      setSessionProjects([]);
+    }
+  };
+
+  const handleSyncCloud = async () => {
+    setIsSyncing(true);
+    try {
+      await store.syncWithSupabase();
+      loadData();
+    } catch (e) {
+      console.warn('Sync cloud notice:', e);
+    } finally {
+      setTimeout(() => setIsSyncing(false), 500);
+    }
+  };
+
+  // Initial Load & Multi-channel Sync
   useEffect(() => {
     loadData();
     // Force sync fresh meetings and projects from Supabase
@@ -91,39 +129,42 @@ export default function TeacherSessionsDashboard() {
       loadData();
     }).catch(() => {});
 
-    // Instant Realtime Subscription (<100ms sync across teacher & student devices)
+    // 1. Supabase Realtime Subscription (<100ms sync across teacher & student devices)
     const unsubscribe = store.subscribeRealtime(() => {
-      const list = store.getMeetings();
-      setMeetings(list);
-      setSelectedMeetingId(currentSelectedId => {
-        const targetId = currentSelectedId && list.some(m => m.id === currentSelectedId)
-          ? currentSelectedId
-          : (list.find(m => m.is_active)?.id || list[0]?.id || '');
-        if (targetId) {
-          setSessionProjects(store.getProjectsByMeeting(targetId));
-        } else {
-          setSessionProjects([]);
-        }
-        return targetId;
-      });
+      loadData();
     });
 
-    return () => unsubscribe();
+    // 2. BroadcastChannel for instant cross-tab sync (teacher grades in another tab)
+    let channel: BroadcastChannel | null = null;
+    try {
+      channel = new BroadcastChannel('kodelab_grade_broadcast');
+      channel.onmessage = () => {
+        loadData();
+      };
+    } catch (e) {}
+
+    // 3. Storage event & custom window event
+    const handleStorageEvent = (e: StorageEvent) => {
+      if (e.key === 'codecamp_user_projects' || e.key === 'codecamp_project_grades' || e.key === 'codecamp_grade_sync_event') {
+        loadData();
+      }
+    };
+    const handleCustomSync = () => {
+      loadData();
+    };
+
+    window.addEventListener('storage', handleStorageEvent);
+    window.addEventListener('kodelab_grade_sync', handleCustomSync);
+
+    return () => {
+      unsubscribe();
+      if (channel) {
+        try { channel.close(); } catch (e) {}
+      }
+      window.removeEventListener('storage', handleStorageEvent);
+      window.removeEventListener('kodelab_grade_sync', handleCustomSync);
+    };
   }, []);
-
-  const loadData = () => {
-    const list = store.getMeetings();
-    setMeetings(list);
-
-    const active = list.find(m => m.is_active) || list[0];
-    if (active) {
-      setSelectedMeetingId(active.id);
-      loadProjectsForMeeting(active.id);
-    } else {
-      setSelectedMeetingId('');
-      setSessionProjects([]);
-    }
-  };
 
   const loadProjectsForMeeting = (meetingId: string) => {
     const projs = store.getProjectsByMeeting(meetingId);
@@ -354,6 +395,16 @@ export default function TeacherSessionsDashboard() {
 
         {/* Header Right Actions */}
         <div className="flex items-center gap-2.5">
+          <button
+            onClick={handleSyncCloud}
+            disabled={isSyncing}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-colors"
+            title="Sinkronkan data dengan cloud Supabase"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin text-primary' : ''}`} />
+            <span className="hidden sm:inline">{isSyncing ? 'Menyinkronkan...' : 'Sync Cloud'}</span>
+          </button>
+
           <button
             onClick={toggleTheme}
             className="p-2 rounded-xl text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors flex items-center justify-center"

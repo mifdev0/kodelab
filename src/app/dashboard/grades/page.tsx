@@ -88,7 +88,34 @@ export default function StudentGradesPage() {
       loadData();
     });
 
-    return () => unsubscribe();
+    let channel: BroadcastChannel | null = null;
+    try {
+      channel = new BroadcastChannel('kodelab_grade_broadcast');
+      channel.onmessage = () => {
+        loadData();
+      };
+    } catch (e) {}
+
+    const handleStorageEvent = (e: StorageEvent) => {
+      if (e.key === 'codecamp_user_projects' || e.key === 'codecamp_project_grades' || e.key === 'codecamp_grade_sync_event') {
+        loadData();
+      }
+    };
+    const handleCustomSync = () => {
+      loadData();
+    };
+
+    window.addEventListener('storage', handleStorageEvent);
+    window.addEventListener('kodelab_grade_sync', handleCustomSync);
+
+    return () => {
+      unsubscribe();
+      if (channel) {
+        try { channel.close(); } catch (e) {}
+      }
+      window.removeEventListener('storage', handleStorageEvent);
+      window.removeEventListener('kodelab_grade_sync', handleCustomSync);
+    };
   }, [loadData, handleSyncCloud]);
 
   // Distinct classes list
