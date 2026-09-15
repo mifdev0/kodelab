@@ -9,7 +9,8 @@ import {
   LayoutDashboard, 
   Users, 
   LogOut,
-  PanelLeftClose
+  PanelLeftClose,
+  Award
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { useLayout } from '@/lib/layout-context';
@@ -29,6 +30,7 @@ export default function Sidebar() {
 
   const teacherNavItems = [
     { label: 'Class Sessions', href: '/dashboard', icon: LayoutDashboard },
+    { label: 'Penilaian Siswa', href: '/dashboard/grades', icon: Award },
     { label: 'Registered Students', href: '/dashboard/students', icon: Users },
     { label: 'Code Editor', href: '/editor', icon: Code2 },
   ];
@@ -73,6 +75,7 @@ export default function Sidebar() {
           const Icon = item.icon;
           const isActive = (() => {
             if (item.href === '/dashboard') return pathname === '/dashboard';
+            if (item.href === '/dashboard/grades') return pathname.startsWith('/dashboard/grades');
             if (item.href === '/dashboard/students') return pathname.startsWith('/dashboard/students');
             if (item.href === '/projects') return pathname === '/projects';
             if (item.href === '/editor') return pathname === '/editor' || pathname.startsWith('/projects/');

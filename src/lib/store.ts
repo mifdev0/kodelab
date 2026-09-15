@@ -31,12 +31,14 @@ const memoryCache: {
   user_projects: UserProject[] | null;
   submissions: Submission[] | null;
   classes: ClassRoom[] | null;
+  project_grades: Record<string, { score: number; teacher_feedback: string; graded_at: string }> | null;
 } = {
   profiles: null,
   meetings: null,
   user_projects: null,
   submissions: null,
   classes: null,
+  project_grades: null,
 };
 
 // Helper functions for state management with in-memory priority + persistent fallback
@@ -606,23 +608,30 @@ export const store = {
 
       let mergedProjects = this.getUserProjects();
       if (!projectsRes.error && projectsRes.data) {
-        const formatted = projectsRes.data.map((p: any) => ({
-          id: p.id,
-          student_id: p.student_id,
-          meeting_id: p.meeting_id,
-          name: p.name,
-          description: p.description,
-          created_at: p.created_at,
-          updated_at: p.updated_at,
-          files: (p.project_files || []).map((f: any) => ({
-            id: f.id,
-            name: f.name,
-            content: f.content,
-            language: f.language,
-            mime_type: f.mime_type,
-            updated_at: f.updated_at,
-          }))
-        }));
+        const grades = this.getGrades();
+        const formatted = projectsRes.data.map((p: any) => {
+          const g = grades[p.id];
+          return {
+            id: p.id,
+            student_id: p.student_id,
+            meeting_id: p.meeting_id,
+            name: p.name,
+            description: p.description,
+            score: p.score ?? g?.score ?? null,
+            teacher_feedback: p.teacher_feedback ?? g?.teacher_feedback ?? null,
+            graded_at: p.graded_at ?? g?.graded_at ?? null,
+            created_at: p.created_at,
+            updated_at: p.updated_at,
+            files: (p.project_files || []).map((f: any) => ({
+              id: f.id,
+              name: f.name,
+              content: f.content,
+              language: f.language,
+              mime_type: f.mime_type,
+              updated_at: f.updated_at,
+            }))
+          };
+        });
         mergedProjects = formatted;
         setStored('user_projects', mergedProjects);
       }
@@ -685,6 +694,7 @@ export const store = {
   getUserProjects(studentId?: string, meetingId?: string): UserProject[] {
     const projects = getStored<UserProject[]>('user_projects', INITIAL_PROJECTS);
     const profiles = this.getProfiles();
+    const grades = this.getGrades();
 
     let list = [...projects];
     if (studentId) {
@@ -701,10 +711,16 @@ export const store = {
       return timeB - timeA;
     });
 
-    return list.map(p => ({
-      ...p,
-      student: profiles.find(prof => prof.id === p.student_id),
-    }));
+    return list.map(p => {
+      const g = grades[p.id];
+      return {
+        ...p,
+        score: g?.score ?? p.score ?? null,
+        teacher_feedback: g?.teacher_feedback ?? p.teacher_feedback ?? null,
+        graded_at: g?.graded_at ?? p.graded_at ?? null,
+        student: profiles.find(prof => prof.id === p.student_id),
+      };
+    });
   },
 
   getProjectsByMeeting(meetingId: string): UserProject[] {
@@ -714,6 +730,7 @@ export const store = {
   getPersonalProjects(studentId?: string): UserProject[] {
     const projects = getStored<UserProject[]>('user_projects', INITIAL_PROJECTS);
     const profiles = this.getProfiles();
+    const grades = this.getGrades();
 
     let list = projects.filter(p => !p.meeting_id);
     if (studentId) {
@@ -726,10 +743,16 @@ export const store = {
       return timeB - timeA;
     });
 
-    return list.map(p => ({
-      ...p,
-      student: profiles.find(prof => prof.id === p.student_id),
-    }));
+    return list.map(p => {
+      const g = grades[p.id];
+      return {
+        ...p,
+        score: g?.score ?? p.score ?? null,
+        teacher_feedback: g?.teacher_feedback ?? p.teacher_feedback ?? null,
+        graded_at: g?.graded_at ?? p.graded_at ?? null,
+        student: profiles.find(prof => prof.id === p.student_id),
+      };
+    });
   },
 
   getUserProject(projectId: string): UserProject | undefined {
@@ -738,8 +761,13 @@ export const store = {
     if (!proj) return undefined;
 
     const profiles = this.getProfiles();
+    const grades = this.getGrades();
+    const g = grades[projectId];
     return {
       ...proj,
+      score: g?.score ?? proj.score ?? null,
+      teacher_feedback: g?.teacher_feedback ?? proj.teacher_feedback ?? null,
+      graded_at: g?.graded_at ?? proj.graded_at ?? null,
       student: profiles.find(prof => prof.id === proj.student_id),
     };
   },
@@ -864,6 +892,82 @@ export const store = {
     }
 
     return projects[index];
+  },
+
+  getGrades(): Record<string, { score: number; teacher_feedback: string; graded_at: string }> {
+    return getStored<Record<string, { score: number; teacher_feedback: string; graded_at: string }>>('project_grades', {});
+  },
+
+  gradeProject(projectId: string, score: number, teacherFeedback: string = ''): UserProject | undefined {
+    const cleanScore = Math.max(0, Math.min(100, Math.round(score)));
+    const now = new Date().toISOString();
+
+    // 1. Update grades dictionary in persistent storage
+    const grades = this.getGrades();
+    grades[projectId] = {
+      score: cleanScore,
+      teacher_feedback: teacherFeedback.trim(),
+      graded_at: now,
+    };
+    setStored('project_grades', grades);
+
+    // 2. Update user_projects list
+    const projects = getStored<UserProject[]>('user_projects', INITIAL_PROJECTS);
+    const index = projects.findIndex(p => p.id === projectId);
+    if (index !== -1) {
+      projects[index] = {
+        ...projects[index],
+        score: cleanScore,
+        teacher_feedback: teacherFeedback.trim(),
+        graded_at: now,
+      };
+      setStored('user_projects', projects);
+    }
+
+    // 3. Sync to Supabase if reachable
+    if (supabase) {
+      try {
+        supabase.from('user_projects').update({
+          score: cleanScore,
+          teacher_feedback: teacherFeedback.trim(),
+          graded_at: now,
+        }).eq('id', projectId).then(() => {}).catch(() => {});
+      } catch (e) {
+        console.warn('Supabase grading sync error:', e);
+      }
+    }
+
+    return this.getUserProject(projectId);
+  },
+
+  removeProjectGrade(projectId: string): void {
+    const grades = this.getGrades();
+    delete grades[projectId];
+    setStored('project_grades', grades);
+
+    const projects = getStored<UserProject[]>('user_projects', INITIAL_PROJECTS);
+    const index = projects.findIndex(p => p.id === projectId);
+    if (index !== -1) {
+      projects[index] = {
+        ...projects[index],
+        score: null,
+        teacher_feedback: null,
+        graded_at: null,
+      };
+      setStored('user_projects', projects);
+    }
+
+    if (supabase) {
+      try {
+        supabase.from('user_projects').update({
+          score: null,
+          teacher_feedback: null,
+          graded_at: null,
+        }).eq('id', projectId).then(() => {}).catch(() => {});
+      } catch (e) {
+        console.warn('Supabase grade reset notice:', e);
+      }
+    }
   },
 
   addProjectFile(projectId: string, fileName: string, initialContent: string = ''): ProjectFile | undefined {

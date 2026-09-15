@@ -81,4 +81,7 @@ export interface UserProject {
   files: ProjectFile[];
   meeting_id?: string;
   student?: Profile;
+  score?: number | null;
+  teacher_feedback?: string | null;
+  graded_at?: string | null;
 }
