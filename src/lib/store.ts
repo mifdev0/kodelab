@@ -1,6 +1,6 @@
 'use client';
 
-import { Profile, ClassRoom, Meeting, Submission, SubmissionStatus, UserProject, ProjectFile, EditorTab } from '@/types';
+import { Profile, ClassRoom, Meeting, MaterialLink, Submission, SubmissionStatus, UserProject, ProjectFile, EditorTab } from '@/types';
 import { supabase, isSupabaseConfigured } from './supabase/client';
 
 // Initial default instructor profile (for fresh environments)
@@ -98,23 +98,82 @@ export function serializeProjectDescription(cleanDesc: string, grade?: { score: 
   return base ? `${base}\n<!--__KODELAB_GRADE__:${payload}-->` : `<!--__KODELAB_GRADE__:${payload}-->`;
 }
 
-// Material link embedding in meeting description for universal cloud sync without schema migrations
+// Material links embedding in meeting description for universal cloud sync without schema migrations
+const MATERIALS_TAG_REGEX = /<!--__KODELAB_MATERIALS__:([\s\S]*?)-->/;
 const MATERIAL_TAG_REGEX = /<!--__KODELAB_MATERIAL__:([\s\S]*?)-->/;
 
-export function parseMeetingDescription(rawDesc?: string): { cleanDescription: string; materialUrl: string } {
-  if (!rawDesc) return { cleanDescription: '', materialUrl: '' };
-  const match = rawDesc.match(MATERIAL_TAG_REGEX);
-  if (!match) return { cleanDescription: rawDesc, materialUrl: '' };
-  const cleanDescription = rawDesc.replace(MATERIAL_TAG_REGEX, '').trim();
-  const materialUrl = (match[1] || '').trim();
-  return { cleanDescription, materialUrl };
+export function parseMeetingDescription(rawDesc?: string): { 
+  cleanDescription: string; 
+  materialUrl: string;
+  materials: MaterialLink[];
+} {
+  if (!rawDesc) return { cleanDescription: '', materialUrl: '', materials: [] };
+
+  let cleanDescription = rawDesc;
+  let materials: MaterialLink[] = [];
+
+  const multiMatch = cleanDescription.match(MATERIALS_TAG_REGEX);
+  if (multiMatch) {
+    cleanDescription = cleanDescription.replace(MATERIALS_TAG_REGEX, '').trim();
+    try {
+      const parsed = JSON.parse(multiMatch[1]);
+      if (Array.isArray(parsed)) {
+        materials = parsed
+          .filter((m: any) => m && (m.url || typeof m === 'string'))
+          .map((m: any, idx: number) => {
+            if (typeof m === 'string') {
+              return { id: `mat-${idx + 1}`, title: `Materi ${idx + 1}`, url: m.trim() };
+            }
+            return {
+              id: m.id || `mat-${idx + 1}`,
+              title: (m.title || `Materi ${idx + 1}`).trim(),
+              url: (m.url || '').trim(),
+            };
+          })
+          .filter(m => !!m.url);
+      }
+    } catch (e) {}
+  }
+
+  const singleMatch = cleanDescription.match(MATERIAL_TAG_REGEX);
+  if (singleMatch) {
+    cleanDescription = cleanDescription.replace(MATERIAL_TAG_REGEX, '').trim();
+    const singleUrl = singleMatch[1].trim();
+    if (singleUrl && materials.length === 0) {
+      materials = [{ id: 'mat-1', title: 'Materi Pembelajaran', url: singleUrl }];
+    }
+  }
+
+  const materialUrl = materials[0]?.url || '';
+  return { cleanDescription, materialUrl, materials };
 }
 
-export function serializeMeetingDescription(cleanDesc: string, materialUrl?: string): string {
-  const base = (cleanDesc || '').replace(MATERIAL_TAG_REGEX, '').trim();
-  const cleanUrl = (materialUrl || '').trim();
-  if (!cleanUrl) return base;
-  return base ? `${base}\n<!--__KODELAB_MATERIAL__:${cleanUrl}-->` : `<!--__KODELAB_MATERIAL__:${cleanUrl}-->`;
+export function serializeMeetingDescription(cleanDesc: string, materials?: MaterialLink[] | string): string {
+  const base = (cleanDesc || '')
+    .replace(MATERIALS_TAG_REGEX, '')
+    .replace(MATERIAL_TAG_REGEX, '')
+    .trim();
+
+  let links: MaterialLink[] = [];
+  if (typeof materials === 'string') {
+    const trimmed = materials.trim();
+    if (trimmed) {
+      links = [{ id: `mat-${Date.now()}`, title: 'Materi Pembelajaran', url: trimmed }];
+    }
+  } else if (Array.isArray(materials)) {
+    links = materials
+      .filter(m => m && m.url && m.url.trim())
+      .map((m, idx) => ({
+        id: m.id || `mat-${Date.now()}-${idx}`,
+        title: (m.title && m.title.trim()) ? m.title.trim() : `Materi ${idx + 1}`,
+        url: m.url.trim(),
+      }));
+  }
+
+  if (links.length === 0) return base;
+  const payload = JSON.stringify(links);
+  const tag = `<!--__KODELAB_MATERIALS__:${payload}-->`;
+  return base ? `${base}\n${tag}` : tag;
 }
 
 // Helper functions for state management with in-memory priority + persistent fallback
@@ -274,11 +333,16 @@ export const store = {
       return timeB - timeA;
     });
     const parsed = sorted.map(m => {
-      const { cleanDescription, materialUrl } = parseMeetingDescription(m.description);
+      const { cleanDescription, materialUrl, materials } = parseMeetingDescription(m.description);
+      const combinedMaterials = (m.materials && m.materials.length > 0)
+        ? m.materials
+        : (materials.length > 0 ? materials : (m.material_url || materialUrl ? [{ title: 'Materi Pembelajaran', url: m.material_url || materialUrl }] : []));
+
       return {
         ...m,
         description: cleanDescription,
-        material_url: m.material_url || materialUrl || undefined,
+        material_url: m.material_url || materialUrl || combinedMaterials[0]?.url || undefined,
+        materials: combinedMaterials.length > 0 ? combinedMaterials : undefined,
       };
     });
     if (!classId) return parsed;
@@ -295,14 +359,25 @@ export const store = {
     meeting_date: string = new Date().toISOString().split('T')[0],
     classId: string = 'class-1',
     banner_url?: string,
-    material_url?: string
+    materials?: MaterialLink[] | string
   ): Promise<Meeting> {
     const meetings = this.getMeetings();
     const nextSessionNum = meetings.length + 1;
 
     const defaultBanner = banner_url || 'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?q=80&w=800&auto=format&fit=crop';
-    const cleanMaterial = (material_url || '').trim();
-    const fullDescription = serializeMeetingDescription(description, cleanMaterial);
+    
+    let links: MaterialLink[] = [];
+    if (typeof materials === 'string' && materials.trim()) {
+      links = [{ id: `mat-${Date.now()}`, title: 'Materi Pembelajaran', url: materials.trim() }];
+    } else if (Array.isArray(materials)) {
+      links = materials.filter(m => m && m.url && m.url.trim()).map((m, idx) => ({
+        id: m.id || `mat-${Date.now()}-${idx}`,
+        title: (m.title && m.title.trim()) ? m.title.trim() : `Materi ${idx + 1}`,
+        url: m.url.trim(),
+      }));
+    }
+
+    const fullDescription = serializeMeetingDescription(description, links);
 
     const newMeeting: Meeting = {
       id: `meeting-${Date.now()}`,
@@ -311,7 +386,8 @@ export const store = {
       title,
       description,
       banner_url: defaultBanner,
-      material_url: cleanMaterial || undefined,
+      material_url: links[0]?.url || undefined,
+      materials: links.length > 0 ? links : undefined,
       meeting_date,
       is_active: true,
       created_at: new Date().toISOString(),
@@ -354,16 +430,23 @@ export const store = {
     return newMeeting;
   },
 
-  async updateMeetingMaterial(meetingId: string, materialUrl: string): Promise<Meeting | undefined> {
+  async updateMeetingMaterials(meetingId: string, materials: MaterialLink[]): Promise<Meeting | undefined> {
     const meetings = this.getMeetings();
     let updatedMeeting: Meeting | undefined;
-    const cleanUrl = materialUrl.trim();
+    const cleanMaterials = materials
+      .filter(m => m && m.url && m.url.trim())
+      .map((m, idx) => ({
+        id: m.id || `mat-${Date.now()}-${idx}`,
+        title: (m.title && m.title.trim()) ? m.title.trim() : `Materi ${idx + 1}`,
+        url: m.url.trim(),
+      }));
 
     const updated = meetings.map(m => {
       if (m.id === meetingId) {
         updatedMeeting = {
           ...m,
-          material_url: cleanUrl || undefined,
+          material_url: cleanMaterials[0]?.url || undefined,
+          materials: cleanMaterials.length > 0 ? cleanMaterials : undefined,
         };
         return updatedMeeting;
       }
@@ -373,7 +456,7 @@ export const store = {
 
     if (supabase && updatedMeeting) {
       try {
-        const fullDesc = serializeMeetingDescription(updatedMeeting.description || '', cleanUrl);
+        const fullDesc = serializeMeetingDescription(updatedMeeting.description || '', cleanMaterials);
         await supabase.from('meetings').update({
           description: fullDesc,
         }).eq('id', meetingId);
@@ -384,6 +467,12 @@ export const store = {
 
     broadcastGradeChange();
     return updatedMeeting;
+  },
+
+  async updateMeetingMaterial(meetingId: string, materialUrl: string): Promise<Meeting | undefined> {
+    const cleanUrl = materialUrl.trim();
+    const links: MaterialLink[] = cleanUrl ? [{ id: `mat-${Date.now()}`, title: 'Materi Pembelajaran', url: cleanUrl }] : [];
+    return this.updateMeetingMaterials(meetingId, links);
   },
 
   async updateMeetingBanner(meetingId: string, bannerUrl: string): Promise<Meeting | undefined> {
@@ -735,11 +824,12 @@ export const store = {
       let mergedMeetings = this.getMeetings();
       if (!meetingsRes.error && meetingsRes.data) {
         mergedMeetings = meetingsRes.data.map((m: any) => {
-          const { cleanDescription, materialUrl } = parseMeetingDescription(m.description);
+          const { cleanDescription, materialUrl, materials } = parseMeetingDescription(m.description);
           return {
             ...m,
             description: cleanDescription,
-            material_url: m.material_url || materialUrl || undefined,
+            material_url: m.material_url || materialUrl || materials[0]?.url || undefined,
+            materials: materials.length > 0 ? materials : undefined,
           };
         });
         setStored('meetings', mergedMeetings);

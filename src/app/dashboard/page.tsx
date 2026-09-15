@@ -63,12 +63,14 @@ export default function TeacherSessionsDashboard() {
   const [newSessionDesc, setNewSessionDesc] = useState('');
   const [newSessionDate, setNewSessionDate] = useState(new Date().toISOString().split('T')[0]);
   const [newSessionBanner, setNewSessionBanner] = useState('');
-  const [newSessionMaterial, setNewSessionMaterial] = useState('');
+  const [newSessionMaterials, setNewSessionMaterials] = useState<{ title: string; url: string }[]>([
+    { title: 'Slide Materi', url: '' }
+  ]);
 
   // Material Link Modal for Teachers
   const [isMaterialModalOpen, setIsMaterialModalOpen] = useState(false);
   const [editingMaterialMeeting, setEditingMaterialMeeting] = useState<Meeting | null>(null);
-  const [materialUrlInput, setMaterialUrlInput] = useState('');
+  const [materialListInput, setMaterialListInput] = useState<{ id?: string; title: string; url: string }[]>([]);
 
   // Banner / Documentation Image Modal for Teachers
   const [isBannerModalOpen, setIsBannerModalOpen] = useState(false);
@@ -199,20 +201,28 @@ export default function TeacherSessionsDashboard() {
     e.preventDefault();
     if (!newSessionTitle.trim()) return;
 
+    const validMaterials = newSessionMaterials
+      .filter(m => m.url.trim() !== '')
+      .map((m, idx) => ({
+        id: `mat-${Date.now()}-${idx}`,
+        title: m.title.trim() || `Materi ${idx + 1}`,
+        url: m.url.trim(),
+      }));
+
     const created = await store.createMeeting(
       newSessionTitle.trim(),
       newSessionDesc.trim(),
       newSessionDate,
       'class-1',
       newSessionBanner.trim() || undefined,
-      newSessionMaterial.trim() || undefined
+      validMaterials
     );
 
     setIsNewSessionModalOpen(false);
     setNewSessionTitle('');
     setNewSessionDesc('');
     setNewSessionBanner('');
-    setNewSessionMaterial('');
+    setNewSessionMaterials([{ title: 'Slide Materi', url: '' }]);
     
     const updated = store.getMeetings();
     setMeetings(updated);
@@ -222,15 +232,29 @@ export default function TeacherSessionsDashboard() {
 
   const handleOpenMaterialModal = (meeting: Meeting) => {
     setEditingMaterialMeeting(meeting);
-    setMaterialUrlInput(meeting.material_url || '');
+    if (meeting.materials && meeting.materials.length > 0) {
+      setMaterialListInput(meeting.materials.map(m => ({ id: m.id, title: m.title, url: m.url })));
+    } else if (meeting.material_url) {
+      setMaterialListInput([{ title: 'Materi Pembelajaran', url: meeting.material_url }]);
+    } else {
+      setMaterialListInput([{ title: 'Slide Materi', url: '' }]);
+    }
     setIsMaterialModalOpen(true);
   };
 
-  const handleSaveMaterial = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSaveMaterial = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     if (!editingMaterialMeeting) return;
 
-    await store.updateMeetingMaterial(editingMaterialMeeting.id, materialUrlInput);
+    const validMaterials = materialListInput
+      .filter(m => m.url.trim() !== '')
+      .map((m, idx) => ({
+        id: m.id || `mat-${Date.now()}-${idx}`,
+        title: m.title.trim() || `Materi ${idx + 1}`,
+        url: m.url.trim(),
+      }));
+
+    await store.updateMeetingMaterials(editingMaterialMeeting.id, validMaterials);
     setIsMaterialModalOpen(false);
     setEditingMaterialMeeting(null);
     loadData();
@@ -544,9 +568,9 @@ export default function TeacherSessionsDashboard() {
                               <Calendar className="w-3 h-3 text-slate-400 shrink-0" />
                               <span>Dibuat: {new Date(meeting.created_at || meeting.meeting_date || Date.now()).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
                             </span>
-                            {meeting.material_url && (
+                            {((meeting.materials && meeting.materials.length > 0) || meeting.material_url) && (
                               <span className="inline-flex items-center gap-0.5 text-[9px] font-extrabold px-1.5 py-0.5 rounded-md bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 shrink-0">
-                                📖 Materi
+                                📖 {meeting.materials && meeting.materials.length > 1 ? `${meeting.materials.length} Materi` : 'Materi'}
                               </span>
                             )}
                           </div>
@@ -676,20 +700,30 @@ export default function TeacherSessionsDashboard() {
 
                     {/* Header Actions */}
                     <div className="flex flex-wrap items-center gap-2">
-                      {/* Material Link Button (for students & teacher) */}
-                      {selectedMeeting.material_url && (
-                        <a
-                          href={selectedMeeting.material_url.startsWith('http') ? selectedMeeting.material_url : `https://${selectedMeeting.material_url}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center gap-1.5 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-xs transition-colors min-h-[38px]"
-                          title="Buka materi pembelajaran sesi ini di tab baru"
-                        >
-                          <BookOpen className="w-3.5 h-3.5 shrink-0" />
-                          <span>Akses Materi</span>
-                          <ExternalLink className="w-3 h-3 shrink-0 opacity-80" />
-                        </a>
-                      )}
+                      {/* Material Link Buttons (for students & teacher) */}
+                      {(() => {
+                        const materials = (selectedMeeting.materials && selectedMeeting.materials.length > 0)
+                          ? selectedMeeting.materials
+                          : (selectedMeeting.material_url ? [{ title: 'Akses Materi', url: selectedMeeting.material_url }] : []);
+                        
+                        return materials.map((mat, idx) => {
+                          const href = mat.url.startsWith('http') ? mat.url : `https://${mat.url}`;
+                          return (
+                            <a
+                              key={mat.id || idx}
+                              href={href}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-1.5 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-xs transition-colors min-h-[38px]"
+                              title={`Buka ${mat.title || 'Materi'} di tab baru`}
+                            >
+                              <BookOpen className="w-3.5 h-3.5 shrink-0" />
+                              <span className="truncate max-w-[160px]">{mat.title || `Materi ${idx + 1}`}</span>
+                              <ExternalLink className="w-3 h-3 shrink-0 opacity-80" />
+                            </a>
+                          );
+                        });
+                      })()}
 
                       {/* Instructor Edit Material Button */}
                       {isTeacher && (
@@ -699,7 +733,11 @@ export default function TeacherSessionsDashboard() {
                           title="Kelola link materi pembelajaran untuk sesi ini"
                         >
                           <BookOpen className="w-3.5 h-3.5 shrink-0 text-blue-500" />
-                          <span>{selectedMeeting.material_url ? 'Edit Materi' : '+ Link Materi'}</span>
+                          <span>
+                            {(selectedMeeting.materials && selectedMeeting.materials.length > 0) || selectedMeeting.material_url
+                              ? 'Kelola Materi'
+                              : '+ Link Materi'}
+                          </span>
                         </button>
                       )}
 
@@ -1045,17 +1083,56 @@ export default function TeacherSessionsDashboard() {
                 />
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-on-surface-variant dark:text-gray-400 uppercase mb-1.5">
-                  Link Materi Pembelajaran / Slide (Optional)
-                </label>
-                <input
-                  type="url"
-                  placeholder="e.g. https://docs.google.com/presentation/... atau link modul"
-                  value={newSessionMaterial}
-                  onChange={(e) => setNewSessionMaterial(e.target.value)}
-                  className="w-full px-3.5 py-2 bg-surface-container dark:bg-gray-900 rounded-xl border border-outline-variant/40 dark:border-gray-700 text-xs focus:outline-none focus:border-primary text-on-surface dark:text-gray-100"
-                />
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-bold text-on-surface-variant dark:text-gray-400 uppercase">
+                    Link Materi Pembelajaran (Optional)
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setNewSessionMaterials(prev => [...prev, { title: '', url: '' }])}
+                    className="text-[11px] font-bold text-primary hover:underline flex items-center gap-1"
+                  >
+                    <Plus className="w-3 h-3" />
+                    <span>+ Tambah Link</span>
+                  </button>
+                </div>
+                {newSessionMaterials.map((item, idx) => (
+                  <div key={idx} className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      placeholder={`Judul (e.g. Slide ${idx + 1})`}
+                      value={item.title}
+                      onChange={(e) => {
+                        const next = [...newSessionMaterials];
+                        next[idx] = { ...next[idx], title: e.target.value };
+                        setNewSessionMaterials(next);
+                      }}
+                      className="w-1/3 px-3 py-2 bg-surface-container dark:bg-gray-900 rounded-xl border border-outline-variant/40 dark:border-gray-700 text-xs focus:outline-none focus:border-primary text-on-surface dark:text-gray-100"
+                    />
+                    <input
+                      type="url"
+                      placeholder="https://..."
+                      value={item.url}
+                      onChange={(e) => {
+                        const next = [...newSessionMaterials];
+                        next[idx] = { ...next[idx], url: e.target.value };
+                        setNewSessionMaterials(next);
+                      }}
+                      className="flex-1 px-3 py-2 bg-surface-container dark:bg-gray-900 rounded-xl border border-outline-variant/40 dark:border-gray-700 text-xs focus:outline-none focus:border-primary text-on-surface dark:text-gray-100"
+                    />
+                    {newSessionMaterials.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => setNewSessionMaterials(prev => prev.filter((_, i) => i !== idx))}
+                        className="p-2 text-on-surface-variant/70 hover:text-rose-500 rounded-lg transition-colors"
+                        title="Hapus baris ini"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                ))}
               </div>
 
               <div className="flex items-center justify-end gap-2 pt-2">
@@ -1165,15 +1242,15 @@ export default function TeacherSessionsDashboard() {
         </div>
       )}
 
-      {/* Modal: Change / Add Learning Material Link */}
+      {/* Modal: Change / Add Learning Material Links */}
       {isMaterialModalOpen && editingMaterialMeeting && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-surface-container-lowest dark:bg-[#181a1f] rounded-2xl shadow-2xl border border-surface-container dark:border-gray-800 w-full max-w-lg p-6 space-y-4 animate-in fade-in zoom-in-95 duration-200">
+          <div className="bg-surface-container-lowest dark:bg-[#181a1f] rounded-2xl shadow-2xl border border-surface-container dark:border-gray-800 w-full max-w-xl p-6 space-y-4 animate-in fade-in zoom-in-95 duration-200">
             <div className="flex items-center justify-between border-b border-surface-container dark:border-gray-800 pb-3">
               <div className="flex items-center gap-2">
                 <BookOpen className="w-5 h-5 text-primary" />
                 <h3 className="text-base font-bold text-on-surface dark:text-gray-100 truncate max-w-sm">
-                  Link Materi: {editingMaterialMeeting.title}
+                  Kelola Materi: {editingMaterialMeeting.title}
                 </h3>
               </div>
               <button
@@ -1186,57 +1263,108 @@ export default function TeacherSessionsDashboard() {
 
             <div className="space-y-4">
               <p className="text-xs text-on-surface-variant dark:text-gray-400 leading-relaxed">
-                Tautkan slide presentasi (Google Slides, Canva, PPT), dokumen ringkasan (Google Docs, Notion), atau modul PDF untuk sesi pertemuan ini. Siswa dan guru dapat langsung mengklik dan membaca materi ini di perangkat masing-masing.
+                Tautkan slide presentasi (Google Slides, Canva), modul (Google Docs, Notion), referensi cheatsheet, atau link drive untuk sesi pertemuan ini. Anda dapat menambahkan lebih dari satu link materi. Siswa dan guru dapat langsung mengklik dan membaca materi di perangkat masing-masing.
               </p>
 
-              <div className="space-y-1.5">
-                <label className="block text-xs font-bold text-on-surface-variant dark:text-gray-400 uppercase">
-                  URL / Link Materi:
-                </label>
-                <div className="relative">
-                  <ExternalLink className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-on-surface-variant/60" />
-                  <input
-                    type="url"
-                    placeholder="https://docs.google.com/presentation/d/... atau https://..."
-                    value={materialUrlInput}
-                    onChange={(e) => setMaterialUrlInput(e.target.value)}
-                    className="w-full pl-10 pr-3.5 py-2.5 bg-surface-container dark:bg-gray-900 rounded-xl border border-outline-variant/40 dark:border-gray-700 text-xs focus:outline-none focus:border-primary text-on-surface dark:text-gray-100"
-                  />
-                </div>
+              {/* Dynamic Material Links List */}
+              <div className="space-y-3 max-h-[50vh] overflow-y-auto pr-1">
+                {materialListInput.map((item, index) => (
+                  <div key={index} className="p-3 bg-surface-container/50 dark:bg-gray-900/50 rounded-xl border border-outline-variant/30 dark:border-gray-800 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[11px] font-bold text-primary uppercase">
+                        Materi #{index + 1}
+                      </span>
+                      <div className="flex items-center gap-1.5">
+                        {item.url.trim() && (
+                          <a
+                            href={item.url.startsWith('http') ? item.url : `https://${item.url}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-2.5 py-1 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 text-[11px] font-bold flex items-center gap-1 transition-colors"
+                            title="Tes Buka Link"
+                          >
+                            <span>Tes Buka</span>
+                            <ExternalLink className="w-3 h-3" />
+                          </a>
+                        )}
+                        {materialListInput.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => setMaterialListInput(prev => prev.filter((_, i) => i !== index))}
+                            className="p-1 text-on-surface-variant hover:text-rose-500 rounded-md transition-colors"
+                            title="Hapus tautan ini"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      <div className="sm:col-span-1">
+                        <label className="block text-[10px] font-semibold text-on-surface-variant dark:text-gray-400 uppercase mb-1">
+                          Judul / Label:
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="e.g. Slide Sesi 1"
+                          value={item.title}
+                          onChange={(e) => {
+                            const next = [...materialListInput];
+                            next[index] = { ...next[index], title: e.target.value };
+                            setMaterialListInput(next);
+                          }}
+                          className="w-full px-3 py-2 bg-surface-container-lowest dark:bg-gray-800 rounded-xl border border-outline-variant/40 dark:border-gray-700 text-xs focus:outline-none focus:border-primary text-on-surface dark:text-gray-100"
+                        />
+                      </div>
+                      <div className="sm:col-span-2">
+                        <label className="block text-[10px] font-semibold text-on-surface-variant dark:text-gray-400 uppercase mb-1">
+                          URL Link:
+                        </label>
+                        <div className="relative">
+                          <ExternalLink className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-on-surface-variant/50" />
+                          <input
+                            type="url"
+                            placeholder="https://docs.google.com/presentation/d/... atau https://..."
+                            value={item.url}
+                            onChange={(e) => {
+                              const next = [...materialListInput];
+                              next[index] = { ...next[index], url: e.target.value };
+                              setMaterialListInput(next);
+                            }}
+                            className="w-full pl-9 pr-3 py-2 bg-surface-container-lowest dark:bg-gray-800 rounded-xl border border-outline-variant/40 dark:border-gray-700 text-xs focus:outline-none focus:border-primary text-on-surface dark:text-gray-100"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
 
-              {materialUrlInput.trim() && (
-                <div className="p-3 rounded-xl bg-primary/5 border border-primary/20 flex items-center justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="text-xs font-semibold text-primary">Tes Buka Link:</p>
-                    <p className="text-[11px] text-on-surface-variant truncate">{materialUrlInput}</p>
-                  </div>
-                  <a
-                    href={materialUrlInput}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="shrink-0 px-3 py-1.5 rounded-lg bg-primary text-white text-xs font-bold hover:bg-primary-hover flex items-center gap-1.5"
-                  >
-                    <span>Buka</span>
-                    <ExternalLink className="w-3 h-3" />
-                  </a>
-                </div>
-              )}
+              {/* Add More Link Button */}
+              <button
+                type="button"
+                onClick={() => setMaterialListInput(prev => [...prev, { title: '', url: '' }])}
+                className="w-full py-2.5 border-2 border-dashed border-primary/30 hover:border-primary text-primary hover:bg-primary/5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all"
+              >
+                <Plus className="w-4 h-4" />
+                <span>+ Tambah Link Materi Lain</span>
+              </button>
 
               <div className="flex items-center justify-between pt-3 border-t border-surface-container dark:border-gray-800">
-                {editingMaterialMeeting.material_url ? (
+                {((editingMaterialMeeting.materials && editingMaterialMeeting.materials.length > 0) || editingMaterialMeeting.material_url) ? (
                   <button
                     type="button"
                     onClick={() => {
-                      setMaterialUrlInput('');
-                      store.updateMeetingMaterial(editingMaterialMeeting.id, '').then(() => {
+                      setMaterialListInput([]);
+                      store.updateMeetingMaterials(editingMaterialMeeting.id, []).then(() => {
                         setMeetings(store.getMeetings());
                         setIsMaterialModalOpen(false);
                       });
                     }}
                     className="text-xs text-rose-500 hover:text-rose-600 font-semibold"
                   >
-                    Hapus Link
+                    Hapus Semua Materi
                   </button>
                 ) : (
                   <div />
@@ -1251,7 +1379,7 @@ export default function TeacherSessionsDashboard() {
                   </button>
                   <button
                     type="button"
-                    onClick={handleSaveMaterial}
+                    onClick={() => handleSaveMaterial()}
                     className="px-5 py-2 text-sm font-bold bg-primary text-white rounded-xl hover:bg-primary-hover shadow-xs transition-colors"
                   >
                     Simpan Link Materi

@@ -32,6 +32,12 @@ export interface ClassStudent {
   student?: Profile;
 }
 
+export interface MaterialLink {
+  id?: string;
+  title: string;
+  url: string;
+}
+
 export interface Meeting {
   id: string;
   class_id: string;
@@ -40,6 +46,7 @@ export interface Meeting {
   description?: string;
   banner_url?: string;
   material_url?: string;
+  materials?: MaterialLink[];
   meeting_date?: string;
   is_active: boolean;
   created_at: string;
