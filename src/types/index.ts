@@ -39,6 +39,7 @@ export interface Meeting {
   title: string;
   description?: string;
   banner_url?: string;
+  material_url?: string;
   meeting_date?: string;
   is_active: boolean;
   created_at: string;

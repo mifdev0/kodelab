@@ -63,6 +63,12 @@ export default function TeacherSessionsDashboard() {
   const [newSessionDesc, setNewSessionDesc] = useState('');
   const [newSessionDate, setNewSessionDate] = useState(new Date().toISOString().split('T')[0]);
   const [newSessionBanner, setNewSessionBanner] = useState('');
+  const [newSessionMaterial, setNewSessionMaterial] = useState('');
+
+  // Material Link Modal for Teachers
+  const [isMaterialModalOpen, setIsMaterialModalOpen] = useState(false);
+  const [editingMaterialMeeting, setEditingMaterialMeeting] = useState<Meeting | null>(null);
+  const [materialUrlInput, setMaterialUrlInput] = useState('');
 
   // Banner / Documentation Image Modal for Teachers
   const [isBannerModalOpen, setIsBannerModalOpen] = useState(false);
@@ -198,18 +204,36 @@ export default function TeacherSessionsDashboard() {
       newSessionDesc.trim(),
       newSessionDate,
       'class-1',
-      newSessionBanner.trim() || undefined
+      newSessionBanner.trim() || undefined,
+      newSessionMaterial.trim() || undefined
     );
 
     setIsNewSessionModalOpen(false);
     setNewSessionTitle('');
     setNewSessionDesc('');
     setNewSessionBanner('');
+    setNewSessionMaterial('');
     
     const updated = store.getMeetings();
     setMeetings(updated);
     setSelectedMeetingId(created.id);
     loadProjectsForMeeting(created.id);
+  };
+
+  const handleOpenMaterialModal = (meeting: Meeting) => {
+    setEditingMaterialMeeting(meeting);
+    setMaterialUrlInput(meeting.material_url || '');
+    setIsMaterialModalOpen(true);
+  };
+
+  const handleSaveMaterial = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingMaterialMeeting) return;
+
+    await store.updateMeetingMaterial(editingMaterialMeeting.id, materialUrlInput);
+    setIsMaterialModalOpen(false);
+    setEditingMaterialMeeting(null);
+    loadData();
   };
 
   const handleOpenBannerModal = (meeting: Meeting) => {
@@ -515,10 +539,17 @@ export default function TeacherSessionsDashboard() {
                           <h3 className="font-bold text-sm text-on-surface dark:text-gray-100 truncate">
                             {meeting.title}
                           </h3>
-                          <span className="text-[10px] text-on-surface-variant/70 dark:text-gray-400 flex items-center gap-1 font-medium mt-0.5 truncate">
-                            <Calendar className="w-3 h-3 text-slate-400 shrink-0" />
-                            <span>Dibuat: {new Date(meeting.created_at || meeting.meeting_date || Date.now()).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
-                          </span>
+                          <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                            <span className="text-[10px] text-on-surface-variant/70 dark:text-gray-400 flex items-center gap-1 font-medium truncate">
+                              <Calendar className="w-3 h-3 text-slate-400 shrink-0" />
+                              <span>Dibuat: {new Date(meeting.created_at || meeting.meeting_date || Date.now()).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                            </span>
+                            {meeting.material_url && (
+                              <span className="inline-flex items-center gap-0.5 text-[9px] font-extrabold px-1.5 py-0.5 rounded-md bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 shrink-0">
+                                📖 Materi
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </div>
 
@@ -645,6 +676,33 @@ export default function TeacherSessionsDashboard() {
 
                     {/* Header Actions */}
                     <div className="flex flex-wrap items-center gap-2">
+                      {/* Material Link Button (for students & teacher) */}
+                      {selectedMeeting.material_url && (
+                        <a
+                          href={selectedMeeting.material_url.startsWith('http') ? selectedMeeting.material_url : `https://${selectedMeeting.material_url}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1.5 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-xs transition-colors min-h-[38px]"
+                          title="Buka materi pembelajaran sesi ini di tab baru"
+                        >
+                          <BookOpen className="w-3.5 h-3.5 shrink-0" />
+                          <span>Akses Materi</span>
+                          <ExternalLink className="w-3 h-3 shrink-0 opacity-80" />
+                        </a>
+                      )}
+
+                      {/* Instructor Edit Material Button */}
+                      {isTeacher && (
+                        <button
+                          onClick={() => handleOpenMaterialModal(selectedMeeting)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-700 dark:text-blue-300 border border-blue-500/20 rounded-xl text-xs font-bold transition-colors min-h-[38px]"
+                          title="Kelola link materi pembelajaran untuk sesi ini"
+                        >
+                          <BookOpen className="w-3.5 h-3.5 shrink-0 text-blue-500" />
+                          <span>{selectedMeeting.material_url ? 'Edit Materi' : '+ Link Materi'}</span>
+                        </button>
+                      )}
+
                       {isTeacher && (
                         <button
                           onClick={(e) => handleToggleSessionStatus(selectedMeeting.id, e)}
@@ -987,6 +1045,19 @@ export default function TeacherSessionsDashboard() {
                 />
               </div>
 
+              <div>
+                <label className="block text-xs font-bold text-on-surface-variant dark:text-gray-400 uppercase mb-1.5">
+                  Link Materi Pembelajaran / Slide (Optional)
+                </label>
+                <input
+                  type="url"
+                  placeholder="e.g. https://docs.google.com/presentation/... atau link modul"
+                  value={newSessionMaterial}
+                  onChange={(e) => setNewSessionMaterial(e.target.value)}
+                  className="w-full px-3.5 py-2 bg-surface-container dark:bg-gray-900 rounded-xl border border-outline-variant/40 dark:border-gray-700 text-xs focus:outline-none focus:border-primary text-on-surface dark:text-gray-100"
+                />
+              </div>
+
               <div className="flex items-center justify-end gap-2 pt-2">
                 <button
                   type="button"
@@ -1088,6 +1159,104 @@ export default function TeacherSessionsDashboard() {
                 >
                   Save Documentation Photo
                 </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Change / Add Learning Material Link */}
+      {isMaterialModalOpen && editingMaterialMeeting && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-surface-container-lowest dark:bg-[#181a1f] rounded-2xl shadow-2xl border border-surface-container dark:border-gray-800 w-full max-w-lg p-6 space-y-4 animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between border-b border-surface-container dark:border-gray-800 pb-3">
+              <div className="flex items-center gap-2">
+                <BookOpen className="w-5 h-5 text-primary" />
+                <h3 className="text-base font-bold text-on-surface dark:text-gray-100 truncate max-w-sm">
+                  Link Materi: {editingMaterialMeeting.title}
+                </h3>
+              </div>
+              <button
+                onClick={() => setIsMaterialModalOpen(false)}
+                className="text-on-surface-variant dark:text-gray-400 hover:text-on-surface dark:hover:text-white"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <p className="text-xs text-on-surface-variant dark:text-gray-400 leading-relaxed">
+                Tautkan slide presentasi (Google Slides, Canva, PPT), dokumen ringkasan (Google Docs, Notion), atau modul PDF untuk sesi pertemuan ini. Siswa dan guru dapat langsung mengklik dan membaca materi ini di perangkat masing-masing.
+              </p>
+
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold text-on-surface-variant dark:text-gray-400 uppercase">
+                  URL / Link Materi:
+                </label>
+                <div className="relative">
+                  <ExternalLink className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-on-surface-variant/60" />
+                  <input
+                    type="url"
+                    placeholder="https://docs.google.com/presentation/d/... atau https://..."
+                    value={materialUrlInput}
+                    onChange={(e) => setMaterialUrlInput(e.target.value)}
+                    className="w-full pl-10 pr-3.5 py-2.5 bg-surface-container dark:bg-gray-900 rounded-xl border border-outline-variant/40 dark:border-gray-700 text-xs focus:outline-none focus:border-primary text-on-surface dark:text-gray-100"
+                  />
+                </div>
+              </div>
+
+              {materialUrlInput.trim() && (
+                <div className="p-3 rounded-xl bg-primary/5 border border-primary/20 flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-primary">Tes Buka Link:</p>
+                    <p className="text-[11px] text-on-surface-variant truncate">{materialUrlInput}</p>
+                  </div>
+                  <a
+                    href={materialUrlInput}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="shrink-0 px-3 py-1.5 rounded-lg bg-primary text-white text-xs font-bold hover:bg-primary-hover flex items-center gap-1.5"
+                  >
+                    <span>Buka</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                </div>
+              )}
+
+              <div className="flex items-center justify-between pt-3 border-t border-surface-container dark:border-gray-800">
+                {editingMaterialMeeting.material_url ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMaterialUrlInput('');
+                      store.updateMeetingMaterial(editingMaterialMeeting.id, '').then(() => {
+                        setMeetings(store.getMeetings());
+                        setIsMaterialModalOpen(false);
+                      });
+                    }}
+                    className="text-xs text-rose-500 hover:text-rose-600 font-semibold"
+                  >
+                    Hapus Link
+                  </button>
+                ) : (
+                  <div />
+                )}
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsMaterialModalOpen(false)}
+                    className="px-4 py-2 text-sm font-semibold text-on-surface-variant dark:text-gray-400 hover:bg-surface-container dark:hover:bg-gray-800 rounded-xl transition-colors"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSaveMaterial}
+                    className="px-5 py-2 text-sm font-bold bg-primary text-white rounded-xl hover:bg-primary-hover shadow-xs transition-colors"
+                  >
+                    Simpan Link Materi
+                  </button>
+                </div>
               </div>
             </div>
           </div>

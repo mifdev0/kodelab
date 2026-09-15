@@ -21,7 +21,7 @@ function transformHtmlLinks(rawHtml: string, assets?: { [name: string]: string }
     const rawHref = (hrefMatch[1] || hrefMatch[2] || hrefMatch[3] || '').trim();
     if (!rawHref || rawHref === '#' || rawHref.startsWith('javascript:')) {
       const cleanedAttrs = attrs.replace(/href=(?:"[^"]*"|'[^']*'|[^>\s]+)/i, '').trim();
-      return `<a href="javascript:void(0)" onclick="return false;" ${cleanedAttrs}>`;
+      return `<a href="#" onclick="return false;" ${cleanedAttrs}>`;
     }
 
     // 1. In-page anchor link (e.g. #beli, #section1, #top)
@@ -33,11 +33,11 @@ function transformHtmlLinks(rawHtml: string, assets?: { [name: string]: string }
         .trim();
 
       if (!targetId || targetId.toLowerCase() === 'top') {
-        return `<a href="javascript:void(0)" data-kodelab-anchor="top" onclick="try{window.scrollTo({top:0,behavior:'smooth'});}catch(e){}return false;" ${cleanedAttrs}>`;
+        return `<a href="#top" data-kodelab-anchor="top" onclick="try{window.scrollTo({top:0,behavior:'smooth'});}catch(e){}return false;" ${cleanedAttrs}>`;
       }
 
       const escapedTarget = targetId.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-      return `<a href="javascript:void(0)" data-kodelab-anchor="${escapedTarget}" onclick="try{var tid='${escapedTarget}';var el=document.getElementById(tid)||document.querySelector('[name=\\''+tid+'\\']');if(el){el.scrollIntoView({behavior:'smooth',block:'start'});}}catch(e){}return false;" ${cleanedAttrs}>`;
+      return `<a href="#${escapedTarget}" data-kodelab-anchor="${escapedTarget}" onclick="try{var tid='${escapedTarget}';var el=document.getElementById(tid)||document.querySelector('[name=\\''+tid+'\\']');if(el){el.scrollIntoView({behavior:'smooth',block:'start'});}}catch(e){}return false;" ${cleanedAttrs}>`;
     }
 
     const cleanFileName = rawHref.replace(/^(\.\/|\/)/, '');
@@ -61,8 +61,8 @@ function transformHtmlLinks(rawHtml: string, assets?: { [name: string]: string }
           .replace(/target=(?:"[^"]*"|'[^']*'|[^>\s]+)/i, '')
           .trim();
 
-        // Safely open in viewer tab (prevents about:blank#blocked)
-        return `<a href="javascript:void(0)" data-kodelab-file="${matchedKey}" data-kodelab-media="true" onclick="try{window.parent.postMessage({type:'NAVIGATE_LOCAL_FILE',fileName:'${matchedKey}'},'*');window.parent.postMessage({type:'VIEW_IMAGE_TAB',fileName:'${matchedKey}',mediaSrc:'${dataUrl}'},'*');}catch(e){}return false;" ${cleanedAttrs}>`;
+        // Safely open in viewer tab synchronously (prevents popup blocker)
+        return `<a href="${rawHref}" data-kodelab-file="${matchedKey}" data-kodelab-media="true" onclick="try{var w=window.open('','_blank');if(w){w.document.write('<!DOCTYPE html><html><head><title>${matchedKey}</title><meta name=\\'viewport\\' content=\\'width=device-width, initial-scale=1.0\\'><style>body{margin:0;background:#0f172a;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:16px;box-sizing:border-box;font-family:sans-serif;}img{max-width:95vw;max-height:92vh;object-fit:contain;box-shadow:0 20px 40px rgba(0,0,0,0.6);border-radius:12px;background:repeating-conic-gradient(#1e293b 0% 25%, #0f172a 0% 50%) 50% / 20px 20px;}</style></head><body><img src=\\'${dataUrl}\\' alt=\\'${matchedKey}\\'></body></html>');w.document.close();}}catch(e){}try{window.parent.postMessage({type:'NAVIGATE_LOCAL_FILE',fileName:'${matchedKey}'},'*');}catch(e){}return false;" ${cleanedAttrs}>`;
       }
     }
 
@@ -93,7 +93,7 @@ function transformHtmlLinks(rawHtml: string, assets?: { [name: string]: string }
       .replace(/target=(?:"[^"]*"|'[^']*'|[^>\s]+)/i, '')
       .trim();
 
-    return `<a href="javascript:void(0)" data-kodelab-file="${cleanFileName}" onclick="try{window.parent.postMessage({type:'NAVIGATE_LOCAL_FILE',fileName:'${cleanFileName}'},'*');}catch(e){}return false;" ${cleanedAttrs}>`;
+    return `<a href="${rawHref}" data-kodelab-file="${cleanFileName}" onclick="try{window.parent.postMessage({type:'NAVIGATE_LOCAL_FILE',fileName:'${cleanFileName}'},'*');}catch(e){}return false;" ${cleanedAttrs}>`;
   });
 }
 

@@ -98,6 +98,25 @@ export function serializeProjectDescription(cleanDesc: string, grade?: { score: 
   return base ? `${base}\n<!--__KODELAB_GRADE__:${payload}-->` : `<!--__KODELAB_GRADE__:${payload}-->`;
 }
 
+// Material link embedding in meeting description for universal cloud sync without schema migrations
+const MATERIAL_TAG_REGEX = /<!--__KODELAB_MATERIAL__:([\s\S]*?)-->/;
+
+export function parseMeetingDescription(rawDesc?: string): { cleanDescription: string; materialUrl: string } {
+  if (!rawDesc) return { cleanDescription: '', materialUrl: '' };
+  const match = rawDesc.match(MATERIAL_TAG_REGEX);
+  if (!match) return { cleanDescription: rawDesc, materialUrl: '' };
+  const cleanDescription = rawDesc.replace(MATERIAL_TAG_REGEX, '').trim();
+  const materialUrl = (match[1] || '').trim();
+  return { cleanDescription, materialUrl };
+}
+
+export function serializeMeetingDescription(cleanDesc: string, materialUrl?: string): string {
+  const base = (cleanDesc || '').replace(MATERIAL_TAG_REGEX, '').trim();
+  const cleanUrl = (materialUrl || '').trim();
+  if (!cleanUrl) return base;
+  return base ? `${base}\n<!--__KODELAB_MATERIAL__:${cleanUrl}-->` : `<!--__KODELAB_MATERIAL__:${cleanUrl}-->`;
+}
+
 // Helper functions for state management with in-memory priority + persistent fallback
 const getStored = <T>(key: string, fallback: T): T => {
   const cached = memoryCache[key as keyof typeof memoryCache];
@@ -254,8 +273,16 @@ export const store = {
       const timeB = new Date(b.created_at || b.meeting_date || 0).getTime();
       return timeB - timeA;
     });
-    if (!classId) return sorted;
-    return sorted.filter(m => m.class_id === classId);
+    const parsed = sorted.map(m => {
+      const { cleanDescription, materialUrl } = parseMeetingDescription(m.description);
+      return {
+        ...m,
+        description: cleanDescription,
+        material_url: m.material_url || materialUrl || undefined,
+      };
+    });
+    if (!classId) return parsed;
+    return parsed.filter(m => m.class_id === classId);
   },
 
   getMeeting(meetingId: string): Meeting | undefined {
@@ -267,12 +294,15 @@ export const store = {
     description: string = '',
     meeting_date: string = new Date().toISOString().split('T')[0],
     classId: string = 'class-1',
-    banner_url?: string
+    banner_url?: string,
+    material_url?: string
   ): Promise<Meeting> {
     const meetings = this.getMeetings();
     const nextSessionNum = meetings.length + 1;
 
     const defaultBanner = banner_url || 'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?q=80&w=800&auto=format&fit=crop';
+    const cleanMaterial = (material_url || '').trim();
+    const fullDescription = serializeMeetingDescription(description, cleanMaterial);
 
     const newMeeting: Meeting = {
       id: `meeting-${Date.now()}`,
@@ -281,6 +311,7 @@ export const store = {
       title,
       description,
       banner_url: defaultBanner,
+      material_url: cleanMaterial || undefined,
       meeting_date,
       is_active: true,
       created_at: new Date().toISOString(),
@@ -295,10 +326,21 @@ export const store = {
     if (supabase) {
       try {
         await supabase.from('meetings').update({ is_active: false }).neq('id', newMeeting.id);
-        const { error } = await supabase.from('meetings').upsert([newMeeting], { onConflict: 'id' });
+        const payloadForSupabase = {
+          id: newMeeting.id,
+          class_id: newMeeting.class_id,
+          session_number: newMeeting.session_number,
+          title: newMeeting.title,
+          description: fullDescription,
+          banner_url: newMeeting.banner_url,
+          meeting_date: newMeeting.meeting_date,
+          is_active: newMeeting.is_active,
+          created_at: newMeeting.created_at,
+        };
+        const { error } = await supabase.from('meetings').upsert([payloadForSupabase], { onConflict: 'id' });
         if (error && error.code === 'PGRST204') {
           // If banner_url column doesn't exist in user's Supabase yet, omit it and upsert
-          const { banner_url, ...mWithoutBanner } = newMeeting;
+          const { banner_url, ...mWithoutBanner } = payloadForSupabase;
           await supabase.from('meetings').upsert([mWithoutBanner], { onConflict: 'id' });
         } else if (error) {
           console.warn('Supabase meeting insert notice:', error.message);
@@ -308,7 +350,40 @@ export const store = {
       }
     }
 
+    broadcastGradeChange();
     return newMeeting;
+  },
+
+  async updateMeetingMaterial(meetingId: string, materialUrl: string): Promise<Meeting | undefined> {
+    const meetings = this.getMeetings();
+    let updatedMeeting: Meeting | undefined;
+    const cleanUrl = materialUrl.trim();
+
+    const updated = meetings.map(m => {
+      if (m.id === meetingId) {
+        updatedMeeting = {
+          ...m,
+          material_url: cleanUrl || undefined,
+        };
+        return updatedMeeting;
+      }
+      return m;
+    });
+    setStored('meetings', updated);
+
+    if (supabase && updatedMeeting) {
+      try {
+        const fullDesc = serializeMeetingDescription(updatedMeeting.description || '', cleanUrl);
+        await supabase.from('meetings').update({
+          description: fullDesc,
+        }).eq('id', meetingId);
+      } catch (e) {
+        console.warn('Supabase material update error:', e);
+      }
+    }
+
+    broadcastGradeChange();
+    return updatedMeeting;
   },
 
   async updateMeetingBanner(meetingId: string, bannerUrl: string): Promise<Meeting | undefined> {
@@ -659,7 +734,14 @@ export const store = {
 
       let mergedMeetings = this.getMeetings();
       if (!meetingsRes.error && meetingsRes.data) {
-        mergedMeetings = meetingsRes.data;
+        mergedMeetings = meetingsRes.data.map((m: any) => {
+          const { cleanDescription, materialUrl } = parseMeetingDescription(m.description);
+          return {
+            ...m,
+            description: cleanDescription,
+            material_url: m.material_url || materialUrl || undefined,
+          };
+        });
         setStored('meetings', mergedMeetings);
       }
 
