@@ -602,7 +602,17 @@ export default function EditorWorkspace({ initialMeetingId }: EditorWorkspacePro
   // Create & Open New Folder
   const handleCreateNewFolder = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newFolderNameInput.trim() || !user) return;
+    if (newFolderSessionId && user.role !== 'teacher') {
+      const allProjects = store.getUserProjects(user.id);
+      const existingInSession = allProjects.find(p => p.meeting_id === newFolderSessionId);
+      if (existingInSession) {
+        setIsNewFolderModalOpen(false);
+        setNewFolderNameInput('');
+        setNewFolderSessionId('');
+        openCustomProjectFolder(existingInSession);
+        return;
+      }
+    }
 
     const newProj = store.createUserProject(
       user.id,

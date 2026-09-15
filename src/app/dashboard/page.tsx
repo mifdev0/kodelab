@@ -321,6 +321,19 @@ export default function TeacherSessionsDashboard() {
     if (!newFolderName.trim() || !selectedMeetingId) return;
 
     const authorId = user?.id || 'teacher-1';
+
+    // Prevent duplicate folder creation (1 account = 1 folder per class session)
+    if (user?.role !== 'teacher') {
+      const alreadyHasFolder = sessionProjects.find(
+        p => p.meeting_id === selectedMeetingId && p.student_id === authorId
+      );
+      if (alreadyHasFolder) {
+        setIsNewFolderModalOpen(false);
+        router.push(`/projects/${alreadyHasFolder.id}`);
+        return;
+      }
+    }
+
     const newProj = await store.createUserProject(
       authorId,
       newFolderName.trim(),
@@ -401,6 +414,11 @@ export default function TeacherSessionsDashboard() {
   }, [sessionProjects]);
 
   const isTeacher = user?.role === 'teacher';
+
+  const myExistingFolder = useMemo(() => {
+    if (!user || isTeacher) return null;
+    return sessionProjects.find(p => p.student_id === user.id);
+  }, [user, isTeacher, sessionProjects]);
 
   return (
     <div className="min-h-screen bg-[#fafbfc] dark:bg-[#07080c] text-slate-900 dark:text-slate-100 transition-colors pb-12 font-sans relative selection:bg-primary selection:text-white">
@@ -754,7 +772,7 @@ export default function TeacherSessionsDashboard() {
                         </button>
                       )}
 
-                      {/* Create Folder in this Session button */}
+                      {/* Create Folder in this Session or Open Existing Folder */}
                       {!selectedMeeting.is_active && !isTeacher ? (
                         <button
                           disabled
@@ -762,6 +780,15 @@ export default function TeacherSessionsDashboard() {
                           title="This session has been closed by the instructor."
                         >
                           <span>🔒 Session Closed</span>
+                        </button>
+                      ) : !isTeacher && myExistingFolder ? (
+                        <button
+                          onClick={() => router.push(`/projects/${myExistingFolder.id}`)}
+                          className="flex items-center gap-1.5 px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-xs transition-colors min-h-[38px]"
+                          title={`Anda sudah memiliki folder "${myExistingFolder.name}" di sesi ini. Buka untuk mengedit kode.`}
+                        >
+                          <Folder className="w-4 h-4 shrink-0" />
+                          <span>Buka Folder Saya</span>
                         </button>
                       ) : (
                         <button

@@ -1023,6 +1023,17 @@ export const store = {
     meetingId?: string
   ): UserProject {
     const projects = getStored<UserProject[]>('user_projects', INITIAL_PROJECTS);
+
+    // Prevent duplicate folder creation (1 account = 1 folder per class session)
+    if (meetingId && studentId !== 'teacher-1') {
+      const existingInSession = projects.find(
+        p => p.meeting_id === meetingId && p.student_id === studentId
+      );
+      if (existingInSession) {
+        return existingInSession;
+      }
+    }
+
     const now = new Date().toISOString();
 
     const initialFiles: ProjectFile[] = withStarterFiles
