@@ -164,7 +164,10 @@ function LivePreviewContent() {
 
       loadProject();
       store.syncWithSupabase().then(() => loadProject());
-      return;
+
+      // Keep the preview live-synced with cloud changes (lock state / code updates)
+      const unsubscribe = store.subscribeRealtime(loadProject);
+      return () => unsubscribe();
     }
 
     // 1. Initial load from localStorage (editor live broadcast)
@@ -182,8 +185,8 @@ function LivePreviewContent() {
         if (parsed.assets) setAssets(parsed.assets || {});
         if (parsed.htmlFiles) setHtmlFiles(parsed.htmlFiles);
       } else {
-        // Fallback: If no preview payload in localStorage, load user's most recent project
-        const userProjects = store.getUserProjects();
+        // Fallback: If no preview payload in localStorage, load the logged-in user's most recent project
+        const userProjects = store.getUserProjects(user?.id);
         if (userProjects && userProjects.length > 0) {
           const defaultProj = userProjects[0];
           setProject(defaultProj);
@@ -252,7 +255,7 @@ function LivePreviewContent() {
       if (channel) channel.close();
       window.removeEventListener('storage', handleStorage);
     };
-  }, [projectIdParam]);
+  }, [projectIdParam, user?.id]);
 
   // Listen to postMessage from iframe for relative file navigation and external links
   useEffect(() => {

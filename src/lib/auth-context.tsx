@@ -73,15 +73,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const cleanUser = username.trim().toLowerCase();
     const cleanPass = password?.trim();
 
-    const found = profiles.find(p => {
-      if (p.role !== 'student') return false;
-      const matchUser = p.username?.toLowerCase() === cleanUser;
-      if (!matchUser) return false;
-      if (cleanPass && p.password) {
-        return p.password === cleanPass;
-      }
-      return true;
-    });
+    const candidates = profiles.filter(
+      p => p.role === 'student' && p.username?.toLowerCase() === cleanUser
+    );
+
+    // Prefer the account whose password matches; fall back to an account with no password set.
+    let found = cleanPass ? candidates.find(p => p.password === cleanPass) : undefined;
+    if (!found && candidates.length > 0) {
+      const noPassword = candidates.find(p => !p.password);
+      if (noPassword) found = noPassword;
+    }
 
     if (found) {
       setUser(found);
@@ -100,17 +101,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const cleanInput = emailOrUsername.trim().toLowerCase();
     const cleanPass = password?.trim();
 
-    const found = profiles.find(p => {
+    const candidates = profiles.filter(p => {
       if (p.role !== 'teacher') return false;
-      const matchIdentity = 
-        p.email?.toLowerCase() === cleanInput || 
-        p.username?.toLowerCase() === cleanInput;
-      if (!matchIdentity) return false;
-      if (cleanPass && p.password) {
-        return p.password === cleanPass;
-      }
-      return true;
+      return (
+        p.email?.toLowerCase() === cleanInput ||
+        p.username?.toLowerCase() === cleanInput
+      );
     });
+
+    let found = cleanPass ? candidates.find(p => p.password === cleanPass) : undefined;
+    if (!found && candidates.length > 0) {
+      const noPassword = candidates.find(p => !p.password);
+      if (noPassword) found = noPassword;
+    }
 
     if (found) {
       setUser(found);

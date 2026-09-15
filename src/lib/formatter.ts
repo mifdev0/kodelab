@@ -309,7 +309,9 @@ export function formatHtml(htmlStr: string): string {
     }
 
     // 7. Text Content between tags
-    const nextTagIdx = src.indexOf('<', pos);
+    // Search strictly after the current position so a stray '<' (e.g. "a < b")
+    // that is not a real tag is consumed as literal text instead of looping forever.
+    const nextTagIdx = src.indexOf('<', pos + 1);
     const textEnd = nextTagIdx !== -1 ? nextTagIdx : src.length;
     const rawText = src.slice(pos, textEnd).trim();
     
@@ -321,7 +323,8 @@ export function formatHtml(htmlStr: string): string {
         formatted += currentIndent + line + '\n';
       }
     }
-    pos = textEnd;
+    // Guarantee forward progress even for unexpected input
+    pos = textEnd > pos ? textEnd : pos + 1;
   }
 
   return formatted.trimEnd() + '\n';

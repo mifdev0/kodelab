@@ -140,7 +140,13 @@ export default function LivePreview({
         }
       } else if (event.data.type === 'OPEN_EXTERNAL_URL' && event.data.url) {
         let url = event.data.url.trim();
-        if (!url.startsWith('http://') && !url.startsWith('https://') && !url.startsWith('//')) {
+        if (
+          !url.startsWith('http://') &&
+          !url.startsWith('https://') &&
+          !url.startsWith('//') &&
+          !url.startsWith('mailto:') &&
+          !url.startsWith('tel:')
+        ) {
           url = 'https://' + url;
         }
         window.open(url, '_blank', 'noopener,noreferrer');

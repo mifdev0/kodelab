@@ -13,14 +13,25 @@ const LayoutContext = createContext<LayoutContextType | undefined>(undefined);
 export function LayoutProvider({ children }: { children: React.ReactNode }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
-  // Auto-collapse on small screens/iPad portrait initially if desired
+  // Auto-collapse on small screens and expand when returning to desktop width.
+  // Only reacts when crossing the breakpoint so manual toggles are respected.
   useEffect(() => {
+    const isMobile = () => window.innerWidth < 768;
+    let wasMobile = isMobile();
+
+    // Initial state based on current viewport
+    setIsSidebarOpen(!wasMobile);
+
     const handleResize = () => {
-      if (window.innerWidth < 768) {
-        setIsSidebarOpen(false);
+      const nowMobile = isMobile();
+      if (nowMobile !== wasMobile) {
+        setIsSidebarOpen(!nowMobile);
+        wasMobile = nowMobile;
       }
     };
-    handleResize();
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
   }, []);
 
   const toggleSidebar = () => {

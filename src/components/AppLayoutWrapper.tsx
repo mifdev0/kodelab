@@ -1,22 +1,65 @@
 'use client';
 
-import React from 'react';
-import { usePathname } from 'next/navigation';
+import React, { useEffect } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
 import Sidebar from '@/components/Sidebar';
 import { useLayout } from '@/lib/layout-context';
+import { useAuth } from '@/lib/auth-context';
+import { Code2 } from 'lucide-react';
+
+// Routes that are accessible without logging in
+const STANDALONE_PATHS = ['/', '/login', '/preview', '/parents', '/recap'];
+
+// Routes that only an instructor may open
+const TEACHER_ONLY_PREFIXES = [
+  '/dashboard/students',
+  '/dashboard/grades',
+  '/dashboard/submissions',
+];
 
 export default function AppLayoutWrapper({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const isStandalone = 
-    pathname === '/' || 
-    pathname === '/login' || 
-    pathname === '/preview' || 
-    pathname === '/parents' || 
-    pathname === '/recap';
+  const router = useRouter();
+  const { user, isLoading } = useAuth();
   const { isSidebarOpen, setIsSidebarOpen } = useLayout();
+
+  const isStandalone = STANDALONE_PATHS.includes(pathname);
+  const isTeacherOnly = TEACHER_ONLY_PREFIXES.some(
+    p => pathname === p || pathname.startsWith(`${p}/`)
+  );
+
+  const isForbidden = Boolean(user) && isTeacherOnly && user?.role !== 'teacher';
+
+  // Redirect unauthenticated / unauthorized visitors to the right place
+  useEffect(() => {
+    if (isStandalone || isLoading) return;
+
+    if (!user) {
+      router.replace('/login');
+      return;
+    }
+    if (isTeacherOnly && user.role !== 'teacher') {
+      router.replace('/dashboard');
+    }
+  }, [isStandalone, isLoading, user, isTeacherOnly, router]);
 
   if (isStandalone) {
     return <>{children}</>;
+  }
+
+  // While auth is hydrating, when there is no user, or when the user is not
+  // allowed on this route, never render the protected page content.
+  if (isLoading || !user || isForbidden) {
+    return (
+      <div className="min-h-screen bg-background dark:bg-[#121418] flex flex-col items-center justify-center gap-3">
+        <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-emerald-500 text-white flex items-center justify-center shadow-lg">
+          <Code2 className="w-6 h-6" />
+        </div>
+        <span className="text-xs font-mono text-on-surface-variant dark:text-gray-400">
+          {isLoading ? 'Memeriksa sesi...' : 'Mengalihkan...'}
+        </span>
+      </div>
+    );
   }
 
   return (

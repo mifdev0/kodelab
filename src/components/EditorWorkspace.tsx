@@ -49,7 +49,7 @@ interface EditorWorkspaceProps {
 }
 
 export default function EditorWorkspace({ initialMeetingId }: EditorWorkspaceProps) {
-  const { user } = useAuth();
+  const { user, isLoading } = useAuth();
 
   // All custom user folders/projects
   const [customProjects, setCustomProjects] = useState<UserProject[]>([]);
@@ -88,6 +88,7 @@ export default function EditorWorkspace({ initialMeetingId }: EditorWorkspacePro
   const [meetings, setMeetings] = useState<any[]>([]);
   const [isRenameFileModalOpen, setIsRenameFileModalOpen] = useState(false);
   const [fileToRename, setFileToRename] = useState<ProjectFile | null>(null);
+  const [renamedName, setRenamedName] = useState('');
 
   // Subfolders (directories) inside active project
   const [customSubfolders, setCustomSubfolders] = useState<string[]>([]);
@@ -156,10 +157,50 @@ export default function EditorWorkspace({ initialMeetingId }: EditorWorkspacePro
 
   const isReadOnly = isLockedBySession || isInstructorInspecting;
 
-  // Load initial data
+  // Load initial data (wait for auth hydration so we never bounce a logged-in user to /login)
   useEffect(() => {
+    if (isLoading) return;
     loadFolders();
-  }, [user?.id, initialMeetingId]);
+  }, [user?.id, initialMeetingId, isLoading]);
+
+  // Live sync: session lock/unlock (and folder changes) propagate across devices/tabs
+  useEffect(() => {
+    if (!user) return;
+
+    const refreshLiveState = () => {
+      setMeetings(store.getMeetings());
+      setCustomProjects(
+        user.role === 'teacher' ? store.getUserProjects() : store.getUserProjects(user.id)
+      );
+    };
+
+    const unsubscribe = store.subscribeRealtime(refreshLiveState);
+
+    let channel: BroadcastChannel | null = null;
+    try {
+      channel = new BroadcastChannel('kodelab_grade_broadcast');
+      channel.onmessage = refreshLiveState;
+    } catch (e) {}
+
+    const handleStorageEvent = (e: StorageEvent) => {
+      if (e.key === 'codecamp_meetings' || e.key === 'codecamp_grade_sync_event') {
+        refreshLiveState();
+      }
+    };
+    const handleCustomSync = () => refreshLiveState();
+
+    window.addEventListener('storage', handleStorageEvent);
+    window.addEventListener('kodelab_grade_sync', handleCustomSync);
+
+    return () => {
+      unsubscribe();
+      if (channel) {
+        try { channel.close(); } catch (e) {}
+      }
+      window.removeEventListener('storage', handleStorageEvent);
+      window.removeEventListener('kodelab_grade_sync', handleCustomSync);
+    };
+  }, [user?.id, user?.role]);
 
   const loadFolders = () => {
     if (!user) {
@@ -600,8 +641,9 @@ export default function EditorWorkspace({ initialMeetingId }: EditorWorkspacePro
   };
 
   // Create & Open New Folder
-  const handleCreateNewFolder = (e: React.FormEvent) => {
+  const handleCreateNewFolder = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!user) return;
     if (newFolderSessionId && user.role !== 'teacher') {
       const allProjects = store.getUserProjects(user.id);
       const existingInSession = allProjects.find(p => p.meeting_id === newFolderSessionId);
@@ -614,7 +656,7 @@ export default function EditorWorkspace({ initialMeetingId }: EditorWorkspacePro
       }
     }
 
-    const newProj = store.createUserProject(
+    const newProj = await store.createUserProject(
       user.id,
       newFolderNameInput.trim(),
       '',

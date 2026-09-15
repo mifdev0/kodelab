@@ -195,12 +195,18 @@ export default function StudentsManagement() {
     e.preventDefault();
     if (!editingStudent || !editFullName.trim() || !editUsername.trim()) return;
 
-    await store.updateStudentProfile(editingStudent.id, {
-      full_name: editFullName.trim(),
-      gender: editGender,
-      class_name: editClassName.trim(),
-      username: editUsername.trim().toLowerCase(),
-    });
+    try {
+      await store.updateStudentProfile(editingStudent.id, {
+        full_name: editFullName.trim(),
+        gender: editGender,
+        class_name: editClassName.trim(),
+        username: editUsername.trim().toLowerCase(),
+      });
+    } catch (err: any) {
+      setCreatedToast(err?.message || 'Failed to update student. Username may already be taken.');
+      setTimeout(() => setCreatedToast(null), 4000);
+      return;
+    }
 
     setEditingStudent(null);
     loadStudents();

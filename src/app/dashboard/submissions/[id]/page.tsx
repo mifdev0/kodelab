@@ -47,7 +47,7 @@ export default function SubmissionDetail() {
     let sub: Submission | undefined;
     if (rawId.includes('_')) {
       const [meetingId, studentId] = rawId.split('_');
-      sub = store.getSubmission(meetingId, studentId);
+      sub = store.getStudentSubmission(meetingId, studentId);
     } else {
       sub = store.getSubmissionById(rawId);
     }

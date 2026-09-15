@@ -223,10 +223,27 @@ const setStored = <T>(key: string, value: T): void => {
   }
 };
 
+// Merge cloud profiles with local ones so accounts created while offline are never lost.
+// Cloud data always wins on id conflicts, but local-only profiles are retained.
+function mergeProfileLists(local: Profile[], cloud: Profile[]): Profile[] {
+  const byId = new Map<string, Profile>();
+  local.forEach(p => { if (p && p.id) byId.set(p.id, p); });
+  cloud.forEach(p => { if (p && p.id) byId.set(p.id, p); });
+  return Array.from(byId.values());
+}
+
 export const store = {
   // Profiles
   getProfiles(): Profile[] {
     return getStored<Profile[]>('profiles', INITIAL_PROFILES);
+  },
+
+  isUsernameTaken(username: string, excludeId?: string): boolean {
+    const clean = username.trim().toLowerCase();
+    if (!clean) return false;
+    return this.getProfiles().some(
+      p => p.id !== excludeId && p.username?.trim().toLowerCase() === clean
+    );
   },
 
   getProfile(id: string): Profile | undefined {
@@ -238,6 +255,9 @@ export const store = {
   },
 
   async updateStudentProfile(studentId: string, updates: Partial<Profile>): Promise<Profile | undefined> {
+    if (updates.username && this.isUsernameTaken(updates.username, studentId)) {
+      throw new Error(`Username "${updates.username.trim()}" is already used by another student.`);
+    }
     const profiles = this.getProfiles();
     let updatedProfile: Profile | undefined;
     const updated = profiles.map(p => {
@@ -544,6 +564,8 @@ export const store = {
         console.warn('Supabase meeting set active error:', e);
       }
     }
+
+    broadcastGradeChange();
   },
 
   async toggleMeetingStatus(meetingId: string): Promise<boolean> {
@@ -567,6 +589,7 @@ export const store = {
       }
     }
 
+    broadcastGradeChange();
     return newStatus;
   },
 
@@ -710,7 +733,15 @@ export const store = {
     const profiles = this.getProfiles();
     const cleanName = name.trim();
     const slug = cleanName.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 10);
-    const username = customUsername?.trim() || `${slug}.${className.toLowerCase().replace(/[^a-z0-9]/g, '') || '7a'}`;
+    let username = customUsername?.trim() || `${slug}.${className.toLowerCase().replace(/[^a-z0-9]/g, '') || '7a'}`;
+
+    // Guarantee unique login usernames so login never resolves to the wrong account
+    if (this.isUsernameTaken(username)) {
+      const base = username;
+      let n = 2;
+      while (this.isUsernameTaken(`${base}-${n}`)) n++;
+      username = `${base}-${n}`;
+    }
 
     const newStudent: Profile = {
       id: `user_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
@@ -749,12 +780,16 @@ export const store = {
     username: string;
     password: string;
   }): Promise<Profile> {
+    const cleanUser = data.username.trim();
+    if (this.isUsernameTaken(cleanUser)) {
+      throw new Error(`Username "${cleanUser}" is already taken. Please choose another one.`);
+    }
     return await this.createStudent(
       data.full_name,
       undefined,
       data.gender,
       data.class_name,
-      data.username,
+      cleanUser,
       data.password
     );
   },
@@ -785,10 +820,21 @@ export const store = {
         return this.getProfiles();
       }
 
-      if (dbProfiles && dbProfiles.length > 0) {
-        const hasTeacher = dbProfiles.some((p: any) => p.id === 'teacher-1' || p.role === 'teacher');
-        const finalProfiles = hasTeacher ? dbProfiles : [...INITIAL_PROFILES, ...dbProfiles];
+      if (dbProfiles) {
+        const local = this.getProfiles();
+        const cloud = dbProfiles as Profile[];
+        // Merge instead of replace so offline-created accounts are never lost
+        let finalProfiles = mergeProfileLists(local, cloud);
+        const hasTeacher = finalProfiles.some((p: any) => p.id === 'teacher-1' || p.role === 'teacher');
+        if (!hasTeacher) finalProfiles = [...INITIAL_PROFILES, ...finalProfiles];
         setStored('profiles', finalProfiles);
+
+        // Best-effort: push local-only accounts up to the cloud
+        const cloudIds = new Set(cloud.map(p => p.id));
+        const localOnly = finalProfiles.filter(p => !cloudIds.has(p.id) && p.id !== 'teacher-1');
+        if (localOnly.length > 0) {
+          void Promise.resolve(supabase.from('profiles').upsert(localOnly, { onConflict: 'id' })).catch(() => {});
+        }
         return finalProfiles;
       }
       return this.getProfiles();
@@ -815,9 +861,12 @@ export const store = {
       ]);
 
       let mergedProfiles = this.getProfiles();
-      if (!profilesRes.error && profilesRes.data && profilesRes.data.length > 0) {
-        const hasTeacher = profilesRes.data.some((p: any) => p.id === 'teacher-1' || p.role === 'teacher');
-        mergedProfiles = hasTeacher ? profilesRes.data : [...INITIAL_PROFILES, ...profilesRes.data];
+      if (!profilesRes.error && profilesRes.data) {
+        const cloud = profilesRes.data as Profile[];
+        let finalProfiles = mergeProfileLists(this.getProfiles(), cloud);
+        const hasTeacher = finalProfiles.some((p: any) => p.id === 'teacher-1' || p.role === 'teacher');
+        if (!hasTeacher) finalProfiles = [...INITIAL_PROFILES, ...finalProfiles];
+        mergedProfiles = finalProfiles;
         setStored('profiles', mergedProfiles);
       }
 
@@ -915,7 +964,7 @@ export const store = {
 
       return () => {
         try {
-          supabase.removeChannel(channel);
+          if (supabase) supabase.removeChannel(channel);
         } catch (e) {}
         clearInterval(interval);
       };
@@ -1015,13 +1064,13 @@ export const store = {
     };
   },
 
-  createUserProject(
+  async createUserProject(
     studentId: string,
     name: string,
     description: string = '',
     withStarterFiles: boolean = false,
     meetingId?: string
-  ): UserProject {
+  ): Promise<UserProject> {
     const projects = getStored<UserProject[]>('user_projects', INITIAL_PROJECTS);
 
     // Prevent duplicate folder creation (1 account = 1 folder per class session)
@@ -1093,15 +1142,19 @@ export const store = {
     const updated = [newProject, ...projects];
     setStored('user_projects', updated);
 
-    // Sync project to Supabase
+    // Sync project to Supabase. Awaited so a background cloud sync can never
+    // replace the local cache before the new folder has been persisted.
     if (supabase) {
-      supabase.from('user_projects').insert([{
-        id: newProject.id,
-        student_id: newProject.student_id,
-        meeting_id: newProject.meeting_id || null,
-        name: newProject.name,
-        description: newProject.description,
-      }]).then(() => {
+      try {
+        const { error } = await supabase.from('user_projects').insert([{
+          id: newProject.id,
+          student_id: newProject.student_id,
+          meeting_id: newProject.meeting_id || null,
+          name: newProject.name,
+          description: newProject.description,
+        }]);
+        if (error) console.warn('Supabase project insert error:', error.message);
+
         if (initialFiles.length > 0) {
           const filesToInsert = initialFiles.map(f => ({
             id: f.id,
@@ -1110,9 +1163,12 @@ export const store = {
             content: f.content,
             language: f.language,
           }));
-          supabase.from('project_files').insert(filesToInsert).then(() => {});
+          const { error: filesError } = await supabase.from('project_files').insert(filesToInsert);
+          if (filesError) console.warn('Supabase project files insert error:', filesError.message);
         }
-      });
+      } catch (e) {
+        console.warn('Supabase project insert network error:', e);
+      }
     }
 
     return newProject;
@@ -1195,10 +1251,10 @@ export const store = {
           graded_at: now,
         });
 
-        supabase.from('user_projects').update({
+        void Promise.resolve(supabase.from('user_projects').update({
           description: fullDescWithGrade,
           updated_at: now,
-        }).eq('id', projectId).then(() => {
+        }).eq('id', projectId)).then(() => {
           broadcastGradeChange();
         }).catch(() => {});
       } catch (e) {
@@ -1232,10 +1288,10 @@ export const store = {
 
     if (supabase) {
       try {
-        supabase.from('user_projects').update({
+        void Promise.resolve(supabase.from('user_projects').update({
           description: cleanDesc,
           updated_at: new Date().toISOString(),
-        }).eq('id', projectId).then(() => {
+        }).eq('id', projectId)).then(() => {
           broadcastGradeChange();
         }).catch(() => {});
       } catch (e) {
