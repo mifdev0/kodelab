@@ -41,6 +41,43 @@ const memoryCache: {
   project_grades: null,
 };
 
+// Grade metadata embedding in description for cloud synchronization without schema migrations
+const GRADE_TAG_REGEX = /<!--__KODELAB_GRADE__:([\s\S]*?)-->/;
+
+export function parseProjectDescription(rawDesc?: string): { cleanDescription: string; grade: { score: number; teacher_feedback: string; graded_at: string } | null } {
+  if (!rawDesc) return { cleanDescription: '', grade: null };
+  const match = rawDesc.match(GRADE_TAG_REGEX);
+  if (!match) return { cleanDescription: rawDesc, grade: null };
+
+  try {
+    const parsed = JSON.parse(match[1]);
+    const cleanDescription = rawDesc.replace(GRADE_TAG_REGEX, '').trim();
+    return {
+      cleanDescription,
+      grade: {
+        score: typeof parsed.score === 'number' ? parsed.score : Number(parsed.score) || 0,
+        teacher_feedback: parsed.note || parsed.teacher_feedback || '',
+        graded_at: parsed.at || parsed.graded_at || new Date().toISOString(),
+      },
+    };
+  } catch (e) {
+    return { cleanDescription: rawDesc.replace(GRADE_TAG_REGEX, '').trim(), grade: null };
+  }
+}
+
+export function serializeProjectDescription(cleanDesc: string, grade?: { score: number; teacher_feedback?: string; graded_at?: string } | null): string {
+  const base = (cleanDesc || '').replace(GRADE_TAG_REGEX, '').trim();
+  if (!grade || grade.score === undefined || grade.score === null) {
+    return base;
+  }
+  const payload = JSON.stringify({
+    score: grade.score,
+    note: grade.teacher_feedback || '',
+    at: grade.graded_at || new Date().toISOString(),
+  });
+  return base ? `${base}\n<!--__KODELAB_GRADE__:${payload}-->` : `<!--__KODELAB_GRADE__:${payload}-->`;
+}
+
 // Helper functions for state management with in-memory priority + persistent fallback
 const getStored = <T>(key: string, fallback: T): T => {
   const cached = memoryCache[key as keyof typeof memoryCache];
@@ -610,16 +647,20 @@ export const store = {
       if (!projectsRes.error && projectsRes.data) {
         const grades = this.getGrades();
         const formatted = projectsRes.data.map((p: any) => {
-          const g = grades[p.id];
+          const { cleanDescription, grade: cloudGrade } = parseProjectDescription(p.description);
+          if (cloudGrade) {
+            grades[p.id] = cloudGrade;
+          }
+          const finalGrade = cloudGrade || grades[p.id];
           return {
             id: p.id,
             student_id: p.student_id,
             meeting_id: p.meeting_id,
             name: p.name,
-            description: p.description,
-            score: p.score ?? g?.score ?? null,
-            teacher_feedback: p.teacher_feedback ?? g?.teacher_feedback ?? null,
-            graded_at: p.graded_at ?? g?.graded_at ?? null,
+            description: cleanDescription,
+            score: p.score ?? finalGrade?.score ?? null,
+            teacher_feedback: p.teacher_feedback ?? finalGrade?.teacher_feedback ?? null,
+            graded_at: p.graded_at ?? finalGrade?.graded_at ?? null,
             created_at: p.created_at,
             updated_at: p.updated_at,
             files: (p.project_files || []).map((f: any) => ({
@@ -632,6 +673,7 @@ export const store = {
             }))
           };
         });
+        setStored('project_grades', grades);
         mergedProjects = formatted;
         setStored('user_projects', mergedProjects);
       }
@@ -712,9 +754,11 @@ export const store = {
     });
 
     return list.map(p => {
-      const g = grades[p.id];
+      const { cleanDescription, grade: embeddedGrade } = parseProjectDescription(p.description);
+      const g = grades[p.id] || embeddedGrade;
       return {
         ...p,
+        description: cleanDescription,
         score: g?.score ?? p.score ?? null,
         teacher_feedback: g?.teacher_feedback ?? p.teacher_feedback ?? null,
         graded_at: g?.graded_at ?? p.graded_at ?? null,
@@ -744,9 +788,11 @@ export const store = {
     });
 
     return list.map(p => {
-      const g = grades[p.id];
+      const { cleanDescription, grade: embeddedGrade } = parseProjectDescription(p.description);
+      const g = grades[p.id] || embeddedGrade;
       return {
         ...p,
+        description: cleanDescription,
         score: g?.score ?? p.score ?? null,
         teacher_feedback: g?.teacher_feedback ?? p.teacher_feedback ?? null,
         graded_at: g?.graded_at ?? p.graded_at ?? null,
@@ -762,9 +808,11 @@ export const store = {
 
     const profiles = this.getProfiles();
     const grades = this.getGrades();
-    const g = grades[projectId];
+    const { cleanDescription, grade: embeddedGrade } = parseProjectDescription(proj.description);
+    const g = grades[projectId] || embeddedGrade;
     return {
       ...proj,
+      description: cleanDescription,
       score: g?.score ?? proj.score ?? null,
       teacher_feedback: g?.teacher_feedback ?? proj.teacher_feedback ?? null,
       graded_at: g?.graded_at ?? proj.graded_at ?? null,
@@ -879,16 +927,21 @@ export const store = {
     const index = projects.findIndex(p => p.id === projectId);
     if (index === -1) return undefined;
 
+    const grades = this.getGrades();
+    const g = grades[projectId];
+    const cleanDesc = (description || '').replace(GRADE_TAG_REGEX, '').trim();
+
     projects[index] = {
       ...projects[index],
       name,
-      description,
+      description: cleanDesc,
       updated_at: new Date().toISOString(),
     };
     setStored('user_projects', projects);
 
     if (supabase) {
-      supabase.from('user_projects').update({ name, description }).eq('id', projectId).then(() => {});
+      const fullDesc = serializeProjectDescription(cleanDesc, g);
+      supabase.from('user_projects').update({ name, description: fullDesc }).eq('id', projectId).then(() => {});
     }
 
     return projects[index];
@@ -914,9 +967,12 @@ export const store = {
     // 2. Update user_projects list
     const projects = getStored<UserProject[]>('user_projects', INITIAL_PROJECTS);
     const index = projects.findIndex(p => p.id === projectId);
+    let cleanDesc = '';
     if (index !== -1) {
+      cleanDesc = parseProjectDescription(projects[index].description).cleanDescription;
       projects[index] = {
         ...projects[index],
+        description: cleanDesc,
         score: cleanScore,
         teacher_feedback: teacherFeedback.trim(),
         graded_at: now,
@@ -924,13 +980,18 @@ export const store = {
       setStored('user_projects', projects);
     }
 
-    // 3. Sync to Supabase if reachable
+    // 3. Sync to Supabase via description payload (Cross-device, works everywhere without migrations!)
     if (supabase) {
       try {
-        supabase.from('user_projects').update({
+        const fullDescWithGrade = serializeProjectDescription(cleanDesc, {
           score: cleanScore,
           teacher_feedback: teacherFeedback.trim(),
           graded_at: now,
+        });
+
+        supabase.from('user_projects').update({
+          description: fullDescWithGrade,
+          updated_at: now,
         }).eq('id', projectId).then(() => {}).catch(() => {});
       } catch (e) {
         console.warn('Supabase grading sync error:', e);
@@ -947,9 +1008,12 @@ export const store = {
 
     const projects = getStored<UserProject[]>('user_projects', INITIAL_PROJECTS);
     const index = projects.findIndex(p => p.id === projectId);
+    let cleanDesc = '';
     if (index !== -1) {
+      cleanDesc = parseProjectDescription(projects[index].description).cleanDescription;
       projects[index] = {
         ...projects[index],
+        description: cleanDesc,
         score: null,
         teacher_feedback: null,
         graded_at: null,
@@ -960,9 +1024,8 @@ export const store = {
     if (supabase) {
       try {
         supabase.from('user_projects').update({
-          score: null,
-          teacher_feedback: null,
-          graded_at: null,
+          description: cleanDesc,
+          updated_at: new Date().toISOString(),
         }).eq('id', projectId).then(() => {}).catch(() => {});
       } catch (e) {
         console.warn('Supabase grade reset notice:', e);
